@@ -1,0 +1,22 @@
+site_name: MHCII presentation
+nav:
+  - Home: index.md
+  - Models: modeling.md
+  - Reference: reference.md
+
+
+theme:
+  name: material
+
+markdown_extensions:
+  - admonition
+  - codehilite
+  - pymdownx.superfences
+
+plugins:
+  - search
+  - mkdocstrings:
+      handlers:
+        python:
+          rendering:
+            show_root_heading: yes

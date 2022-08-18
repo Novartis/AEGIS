@@ -1,0 +1,811 @@
+#!/usr/bin/env python
+# -*- coding: utf-8 -*-
+
+"""utils.py
+
+This file contains a number of utility functions used throughout the project.
+
+"""
+
+import copy
+import json
+import os
+import random
+from collections import Counter
+from itertools import count, tee
+from pathlib import Path
+from typing import Dict, Iterator, List, Optional, Tuple
+
+import matplotlib.pyplot as plt
+import numpy as np
+import pandas as pd
+import torch
+from Bio import SeqIO
+from Bio.Seq import Seq
+from Bio.SeqRecord import SeqRecord
+from scipy import sparse
+from sklearn.metrics import (
+    auc,
+    confusion_matrix,
+    matthews_corrcoef,
+    precision_recall_fscore_support,
+    roc_auc_score,
+    roc_curve,
+)
+from sklearn.preprocessing import Binarizer
+from torch import backends, nn
+from tqdm import tqdm
+
+from mhciipresentation.constants import (
+    AA_TO_INT,
+    AMINO_ACIDS,
+    FORCE_PREPROCESSING,
+    USE_GPU,
+)
+from mhciipresentation.loaders import load_pseudosequences, load_uniprot
+from mhciipresentation.paths import CACHE_DIR
+
+
+def check_cache(input_file: str):
+    if (
+        not Path(CACHE_DIR).exists()
+        or FORCE_PREPROCESSING
+        or not Path(CACHE_DIR + input_file).exists()
+    ):
+        make_dir(CACHE_DIR)
+        return False
+    else:
+        return True
+
+
+def flatten_lists(lists: list) -> list:
+    """Removes nested lists"""
+    result = list()
+    for _list in lists:
+        _list = list(_list)
+        if _list != []:
+            result += _list
+        else:
+            continue
+    return result
+
+
+def shuffle_features_and_labels(
+    X: np.ndarray, y: np.ndarray
+) -> Tuple[np.ndarray, np.ndarray]:
+    """Shuffles labels and features in the same order.
+
+    Args:
+        X (np.ndarray): features of shape (n_samples * n_features)
+        y (np.ndarray): labels of shape (n_samples * 1)
+
+    Returns:
+        Tuple[np.ndarray, np.ndarray]: shuffles labels and features
+    """
+    idx = np.random.permutation(len(X))
+    return X[idx], y[idx]
+
+
+def pandas2fasta(
+    df: pd.DataFrame,
+    fasta_file_name: str,
+    sequence_col: str,
+    description_col: str = None,
+    description_generic: str = "peptide bound to MHCII",
+):
+    """Exports a pandas dataframe to a fasta file."""
+    if Path(fasta_file_name).exists():
+        os.remove(fasta_file_name)
+
+    with open(fasta_file_name, "a") as f:
+        for i in df[sequence_col].iteritems():
+            if description_col is not None:
+                record = SeqRecord(
+                    Seq(i[1]),
+                    id=str(i[0]),
+                    description=df.iloc[i[0]][description_col],
+                )
+
+            else:
+                record = SeqRecord(
+                    Seq(i[1]), id=str(i[0]), description=description_generic
+                )
+
+            SeqIO.write(record, f, "fasta")
+
+
+def uniquify(input_seq: list, suffs: Iterator[int] = count(1)):
+    """Make all the items unique by adding a suffix (_1, _2, etc).
+
+    `seq` is mutable sequence of strings.
+    `suffs` is an optional alternative suffix iterable.
+    """
+    seq = input_seq.copy()
+    not_unique = [
+        k for k, v in Counter(seq).items() if v > 1
+    ]  # so we have: ['name', 'zip']
+    # suffix generator dict - e.g., {'name': <my_gen>, 'zip': <my_gen>}
+    suff_gens = dict(zip(not_unique, tee(suffs, len(not_unique))))
+    for idx, s in enumerate(seq):
+        try:
+            suffix = str(next(suff_gens[s]))
+        except KeyError:
+            # s was unique
+            continue
+        else:
+            seq[idx] = seq[idx] + "_" + suffix
+    return seq
+
+
+def make_dir(directory: str) -> None:
+    """Makes directory and does not stop if it is already created.
+
+    Args:
+        directory (str): directory to be created
+    """
+
+    try:
+        os.mkdir(directory)
+    except OSError:
+        print(
+            f"Creation of the directory {directory} failed, probably already "
+            f"exists"
+        )
+    else:
+        print(f"Successfully created the directory {directory}")
+
+
+def aa_seq_to_int(s: str, aa_to_int: dict) -> List[int]:
+    """Maps an amino acid sequence to a list of strings
+
+    Args:
+        s (str): input sequence
+
+    Raises:
+        ValueError: when the sequence does not contain characters that can be
+        mapped to integers
+
+    Returns:
+        List[int]: list of mapped integers
+    """
+    # Make sure only valid aa's are passed
+    if not set(s).issubset(set(aa_to_int.keys())):
+        raise ValueError(
+            f"Unsupported character(s) in sequence found:"
+            f" {set(s).difference(set(aa_to_int.keys()))}"
+        )
+    return (
+        [aa_to_int["start"]] + [aa_to_int[a] for a in s] + [aa_to_int["stop"]]
+    )
+
+
+def encode_aa_sequences(
+    aa_sequences: pd.Series, aa_to_int: dict
+) -> np.ndarray:
+    """Encodes a given series of amino acids
+
+    Args:
+        aa_sequences (pd.Series): amino acids to encode
+
+    Returns:
+        np.ndarray: encoded array of integers
+    """
+    return np.array(
+        [
+            arr.tolist()
+            for arr in aa_sequences.apply(
+                lambda x: np.array(aa_seq_to_int(x, aa_to_int))
+            ).values
+        ],
+        dtype=object,
+    )
+
+
+def add_peptide_context(
+    peptide: pd.Series, peptide_context: pd.Series
+) -> pd.Series:
+    """Adds the peptide flanking regions to the peptide. If a peptide has
+        a sequence ABCDEFGH, and the peptide context consists of UVWABCFGHXYZ,
+        then this function returns UVWABCDEFGHXYZ.
+
+    Args:
+        peptide (pd.Series): amino acids eluted and sequenced using MS
+        peptide_context (pd.Series): peptide context including PFRs
+
+    Returns:
+        pd.Series: peptide containing PFRs
+    """
+    before = peptide_context.str[:3].to_frame()
+    before.columns = ["before"]
+    after = peptide_context.str[-3:].to_frame()
+    after.columns = ["after"]
+    return before.join(peptide.to_frame()).join(after).agg("".join, axis=1)
+
+
+def join_peptide_with_pseudosequence(
+    peptide_with_context: pd.Series, pseudosequence: pd.Series,
+) -> pd.Series:
+    """Adds the peptide, pads it and appends the associated pseudosequence.
+        Given a peptide ABCDEF and and a pseudosequence HIJK, the function
+        returns a series of strings ABCDEFXXXXXHIJK, where the number of Xs
+        depends on the padding width.
+
+    Args:
+        peptide_with_context (pd.Series): peptide containing the PFR
+        pseudosequence (pd.Series): pseudosequence of the MHC molecule
+
+    Returns:
+        pd.Series: series used as input for the LSTM
+    """
+    return (
+        peptide_with_context.to_frame()
+        .join(pseudosequence.to_frame())
+        .agg("".join, axis=1)
+    )
+
+
+def compute_performance_measures(
+    y_pred: np.ndarray, y_true: np.ndarray
+) -> Dict:
+    """Computes necessary measures to assess model performance
+
+    Args:
+        y_pred (np.ndarray): predicted output by the model
+        y_true (np.ndarray): ground truth label
+
+    Returns:
+        Dict: set of performance measures associated to predictions
+    """
+    y_pred_bin = Binarizer(threshold=0.5).transform(y_pred)
+    precision, recall, f1, _ = precision_recall_fscore_support(
+        y_true, y_pred_bin, average="binary"
+    )
+    auc = roc_auc_score(y_true, y_pred)
+    matthews = matthews_corrcoef(y_true, y_pred_bin)
+    tn, fp, fn, tp = confusion_matrix(y_true, y_pred_bin).ravel()
+
+    return {
+        "f1": f1,
+        "precision": precision,
+        "recall": recall,
+        "auc": auc,
+        "matthews_corrcoef": matthews,
+        "tn": int(tn),
+        "fp": int(fp),
+        "fn": int(fn),
+        "tp": int(tp),
+    }
+
+
+def prepare_batch(
+    step: int,
+    batch_size: int,
+    pad_width: int,
+    pad_num: int,
+    features: np.ndarray,
+    labels: Optional[np.ndarray] = None,
+) -> Tuple[torch.Tensor, torch.Tensor]:
+    """Prepares a given batch for processing by the model the following way:
+        1. Pad the seq of ints to the longest seq length.
+        2. Concat to a tensor
+    TODO: make labels optional for evaluation
+    Args:
+        step (int): index of the starting sample of the batch
+        features (np.ndarray): (n_samples, n_features) feature set to fetch batch
+            samples from.
+        labels (np.ndarray): (n_samples, 1 targets)
+        batch_size (int): batch size desized
+        pad_width (int): width of the padding used to make sure all input
+            sequences are of the same length
+        pad_num [int]: number to be masked due to padding
+
+    Returns:
+        Tuple[torch.Tensor, torch.Tensor]: padded batch sequences of shape
+            (batch_size, pad_width) and reshaped labels
+    """
+    dataset_size = len(features)
+    if not labels:
+        labels = np.zeros(len(features))
+
+    batch_in = []
+    batch_target = []
+    for sample_idx in range(step, min(step + batch_size, dataset_size), 1):
+
+        in_seq = features[sample_idx]
+        target = labels[sample_idx]
+
+        batch_in.append(in_seq)
+        batch_target.append(target)
+
+    # Right padding
+    seq_padded = [
+        np.pad(
+            seq, pad_width=(0, pad_width - len(seq)), constant_values=pad_num
+        )
+        for seq in batch_in
+    ]
+    return (
+        torch.tensor(np.array(seq_padded, dtype=int)),
+        torch.tensor(batch_target).reshape(-1, 1),
+    )
+
+
+def set_seeds() -> None:
+    """Sets the seeds for most of the packages used in this repository"""
+    SEED = 42
+    random.seed(SEED)
+    np.random.seed(SEED)
+    torch.manual_seed(SEED)
+    torch.cuda.manual_seed(SEED)
+    backends.cudnn.deterministic = True
+
+
+def set_pandas_options() -> None:
+    """Sets appropriate values for debugging."""
+    pd.options.display.max_colwidth = 150
+    pd.options.display.max_columns = 150
+    pd.options.display.max_rows = 150
+
+
+# One hot encoding functions
+def onehot_encode_amino_acid_sequence(aa_seq: str) -> list:
+    """Computes the one hot encoding of an amino acid sequence
+
+    Args:
+        aa_seq (str): input amino acid sequence
+
+    Returns:
+        list: list of the one-hot encoded amino acid sequence.
+    """
+    return [
+        [0 if char != letter else 1 for char in AMINO_ACIDS]
+        for letter in aa_seq
+    ]
+
+
+def encode_mhcii(
+    fcontent: pd.DataFrame, column: str = "Pseudosequence"
+) -> np.ndarray:
+    """One hot encodes the MHCII pseudosequence
+
+
+    Args:
+        fcontent (pd.DataFrame): dataframe containing the pseudosequence to
+            encode
+        column (str): column name for the MHCII pseudosequence
+
+    Returns:
+        np.ndarray: one hot encoded MHCII
+    """
+    return np.matrix(
+        fcontent[column]
+        .str.pad(side="both", fillchar="X", width=12)
+        .apply(
+            lambda x: np.array(onehot_encode_amino_acid_sequence(x)).flatten()
+        )
+        .tolist()
+    )
+
+
+def encode_peptide(
+    fcontent: pd.DataFrame, column: str = "peptide"
+) -> np.ndarray:
+    """One hot encodes the peptides.
+
+    Args:
+        fcontent (pd.DataFrame): dataframe containing the peptide sequences to
+            encode
+        column (str): column name for the peptide sequences
+
+    Returns:
+        np.ndarray: One hot encoded peptide sequence
+    """
+    # Returns matrix of shape (n_samples * 441 (21 AA * 21 (padded) peptides))
+    return np.matrix(
+        fcontent[column]
+        .str.pad(side="both", fillchar="X", width=21)
+        .apply(
+            lambda x: np.array(onehot_encode_amino_acid_sequence(x)).flatten()
+        )
+        .tolist()
+    )
+
+
+def encode_context(
+    fcontent: pd.DataFrame, column: str = "peptide_context"
+) -> np.ndarray:
+    """One hot encodes the peptide context
+
+    Args:
+        fcontent (pd.DataFrame): dataframe containing the peptide sequences to
+            encode
+        column (str): column used to encode the peptide context
+
+    Returns:
+        np.ndarray: encoded peptide context
+    """
+    # Encode context
+    # Yields matrix of dimension (n_samples * 252 (21 AA * 12 (padded) peptides))
+    return np.stack(  # type: ignore
+        np.array(
+            fcontent[column]
+            .str.pad(side="both", fillchar="X", width=12)
+            .apply(
+                lambda x: np.array(
+                    onehot_encode_amino_acid_sequence(x)
+                ).flatten()
+            )
+        )
+    )
+
+
+def oh_encode(
+    fcontent: pd.DataFrame,
+) -> Tuple[sparse.csr.csr_matrix, pd.Series]:
+    """Fully encodes the input dataframe
+
+    Args:
+        fcontent (pd.DataFrame): input dataframe containing the peptide
+            sequences, mhcii pseudosequence and peptide context
+
+    Returns:
+        Tuple[sparse.csr.csr_matrix, pd.Series]: encoded features and target
+            values
+    """
+    encoded_mhcii = encode_mhcii(fcontent)
+    print(f"Encoded MHCII is of shape {encoded_mhcii.shape}")
+    encoded_peptide = encode_peptide(fcontent)
+    print(f"Encoded peptide is of shape {encoded_peptide.shape}")
+    encoded_context = encode_context(fcontent)
+    print(f"Encoded context is of shape {encoded_context.shape}")
+    encoded_fcontent = sparse.csr_matrix(
+        np.hstack([encoded_mhcii, encoded_peptide, encoded_context])
+    )
+    print(f"Final encoded object is of shape {encoded_fcontent.shape}")
+    return encoded_fcontent, fcontent.target_value
+
+
+def get_peptide_context(
+    peptides: pd.Series, source_proteins: pd.Series
+) -> pd.Series:
+    """Gets the peptide context for each peptides (flanking regions ±3 aa before
+    and after the peptides). Pads with X if a peptide is on a terminus of a
+    protein.
+
+    Args:
+        peptides (pd.Series): series containing the sequence of the peptides
+        source_proteins (pd.Series): source proteins from which a context can be
+            extracted
+
+    Returns:
+        pd.Series: peptide with the context added to either end.
+    """
+    peptide_flanking_regions = list()
+    for peptide in tqdm(peptides.str.strip().tolist()):
+        if source_proteins.str.contains(peptide, case=False).any():
+            after = (
+                source_proteins.loc[
+                    source_proteins.str.contains(peptide, case=False)
+                ]
+                .iloc[0]
+                .split(peptide.upper())[1][:3]
+                .ljust(3, "X")
+            )
+            before = (
+                source_proteins.loc[
+                    source_proteins.str.contains(peptide, case=False)
+                ]
+                .iloc[0]
+                .split(peptide.upper())[0][-3:]
+                .rjust(3, "X")
+            )
+            peptide_flanking_regions.append(
+                {"peptide": peptide, "before": before, "after": after}
+            )
+    peptide_flanking_regions_df = pd.DataFrame(peptide_flanking_regions)
+    peptide_flanking_regions_df = peptide_flanking_regions_df.dropna()
+    return (
+        peptide_flanking_regions_df["before"]
+        .to_frame()
+        .join(peptide_flanking_regions_df["peptide"].to_frame())
+        .join(peptide_flanking_regions_df["after"].to_frame())
+        .agg("".join, axis=1)
+    )
+
+
+def generate_negative_peptides(white_space: List, bounds: Tuple) -> pd.Series:
+    """Generates negative peptides from the white space (protein space without
+        any presented peptides)
+
+    Args:
+        white_space (List): non presented regions of proteins from which
+            peptides are presented
+        bounds (Tuple): bounds to use when generating negative peptides
+
+    Returns:
+        pd.Series: negative peptides
+    """
+    neg_peptides = list()
+    # We loop through the length of ranges + 3 amino acids because of the PFRs
+    print("Generating negative peptides.")
+    # We have to extend the range to bounds[1] + 4 due to range up to n-1.
+    for length in tqdm(range(bounds[0], bounds[1] + 1)):
+        for peptide in white_space:
+            for i in range(len(peptide) - length + 1):
+                neg_peptides.append(peptide[i : i + length])
+
+    neg_peptides_series = pd.Series(neg_peptides)
+    return neg_peptides_series.astype("str")
+
+
+def get_white_space(peptides: pd.Series, proteins: pd.Series) -> List:
+    """Get regions of the proteins which are not presented
+
+    Args:
+        peptides (pd.Series): presented peptides
+        proteins (pd.Series): source proteins
+
+    Returns:
+        List: regions of proteins which are not presented but those proteins
+            contain regions that are presented
+    """
+    white_space = list()
+    print("Generating white space")
+    for peptide in tqdm(peptides.tolist()):
+        proteins_containing_peptide = proteins.loc[
+            proteins.str.contains(peptide)
+        ].tolist()
+        for protein in proteins_containing_peptide:
+            white_space.append(protein.split(peptide))
+    return flatten_lists(white_space)  # type: ignore
+
+
+def take(n: int, to_take_from: Dict) -> Dict:
+    """Returns n first elements from a dictionary
+
+    Args:
+        n (int): numbers of elements to take
+        to_take_from (Dict): dictionary from which to take `n` elements
+
+    Returns:
+        List: list of elements
+    """
+    return {k: to_take_from[k] for k in list(to_take_from.keys())[:n]}
+
+
+def save_model(model: nn.Module, out_dir: str) -> None:
+    """Saves a PyTorch model in such a way that it can be loaded back into
+        memory for inference
+
+    Args:
+        model (nn.Module): model to save
+        out_dir (str): where to save the model
+    """
+    torch.save(model.state_dict(), out_dir)
+
+
+def save_training_params(training_params: Dict, out_dir: str) -> None:
+    """Saves a .json file with the training hyperparameters of the model
+
+    Args:
+        training_params (Dict): contains all the hyperparameters used for
+            training
+        out_dir (str): where to save training_params
+    """
+    with open(out_dir + "training_params.json", "w") as outfile:
+        json.dump(training_params, outfile)
+
+
+def get_n_trainable_params(model: torch.nn.Module):
+    """Prins the number of trainable parameters in a PyTorch model.
+
+    Args:
+        model (torch.nn.Module): model from which to extract parameters
+    """
+    pytorch_total_params = sum(p.numel() for p in model.parameters())
+    print("Parameters in Millions: ", pytorch_total_params / 1e6)
+
+
+def load_model_weights(
+    model: nn.Module, model_dir: str, device: torch.device
+) -> nn.Module:
+    """Loads model weights
+
+    Args:
+        model (nn.Module): Loads PyTorch model weights
+        model_dir (str): model directory
+        device (torch.device): device on which to put the model
+
+    Returns:
+        nn.Module: model with weights
+    """
+    if USE_GPU:
+        model.load_state_dict(copy.deepcopy(torch.load(model_dir)))
+        model = model.to(device)
+    else:
+        model.load_state_dict(
+            copy.deepcopy(
+                torch.load(model_dir, map_location=torch.device("cpu"))
+            )
+        )
+    return model
+
+
+def make_predictions_with_transformer(
+    X: np.ndarray,
+    batch_size: int,
+    device: torch.device,
+    model: torch.nn.Module,
+    pad_width: int,
+    pad_num: int,
+) -> np.ndarray:
+    """Makes a prediction using a transformer model by building a masking
+    tensor.
+
+    Args:
+        X (np.ndarray): input features
+        y (np.ndarray): labels
+        batch_size (int): size of each batch passed to the model.
+        device (torch.device): device used for execution
+        model (torch.nn.Module): model used to make predictions
+        pad_width (int): padding width used to make sure each input sequence
+            has the same length
+        pad_num (int): number representing padding.
+
+    Returns:
+        np.ndarray: vstacked predictions for each input vector.
+    """
+    steps_eval = list(range(0, X.shape[0], batch_size))
+    y_pred_batches = list()
+    for step in tqdm(steps_eval, position=2, leave=False):
+        X_batch, _ = prepare_batch(
+            step, batch_size, pad_width, pad_num, X, None
+        )
+        X_batch = (
+            X_batch.cuda(device=device, non_blocking=True)
+            if USE_GPU
+            else X_batch
+        )
+        src_padding_mask = X_batch == pad_num
+
+        src_padding_mask = (
+            src_padding_mask.to(device) if USE_GPU else src_padding_mask
+        )
+
+        if batch_size != X_batch.size(0):  # only on last batch
+            src_padding_mask = src_padding_mask[
+                : X_batch.size(0), : X_batch.size(1)
+            ]
+
+        y_pred_batches.append(
+            model(X_batch, src_padding_mask).cpu().detach().numpy()
+        )
+    return np.vstack(y_pred_batches)  # type: ignore
+
+
+def render_roc_curve(y_pred, y_true, dest_dir, title, fname):
+    fpr, tpr, thresholds = roc_curve(y_true, y_pred)
+    roc_auc = auc(fpr, tpr)
+    plt.figure()
+    lw = 2
+    plt.plot(
+        fpr,
+        tpr,
+        color="darkorange",
+        lw=lw,
+        label="ROC curve (area = %0.2f)" % roc_auc,
+    )
+    plt.plot([0, 1], [0, 1], color="navy", lw=lw, linestyle="--")
+    plt.xlim([0.0, 1.0])
+    plt.ylim([0.0, 1.0])
+    plt.xlabel("False Positive Rate")
+    plt.ylabel("True Positive Rate")
+    plt.title(title)
+    plt.legend(loc="lower right")
+    plt.savefig(dest_dir + fname + ".png")
+
+
+def sample_peptides(hs_uniprot_str: str, peptide_length: int, n: int) -> List:
+    """Samples peptide uniformly from uniprot.
+
+    Args:
+        hs_uniprot_str (str): homo sapiens uniprot proteins separated by |.
+        peptide_length (int): desired peptide length
+        n (int): number of peptide length
+
+    Returns:
+        List: sampled decoy peptides of the desired length.
+    """
+
+    protein_space_len = len(hs_uniprot_str)
+    peptides: List = list()
+    while len(peptides) < n:
+        start = random.sample(range(protein_space_len), 1)[0]
+        peptide_candidate = hs_uniprot_str[start : start + peptide_length]
+        if "|" not in peptide_candidate:
+            peptides.append(peptide_candidate)
+        print(
+            f"Sampling peptides from SwissProt space {(len(peptides)/n)*100}"
+            "% complete.",
+            end="\r",
+        )
+    print("")
+    return peptides
+
+
+def sample_from_human_uniprot(n_len: Dict) -> List:
+    """Sample from human uniprot
+
+    Args:
+        n_len (Dict): length of peptides.
+
+    Returns:
+        List: list of sampled decoy. Nested list for each peptide length, needs
+            to be flattened for use.
+    """
+    uniprot = load_uniprot()
+    peptides = list()
+    hs_uniprot = uniprot.loc[uniprot["Species ID"] == 9606]
+    # We want to create one giant string to sample from to avoid sampling from
+    # short proteins more often (row-wise sampling bias).
+    hs_uniprot_str = "|".join(hs_uniprot.Sequence.tolist())
+    for peptide_length in list(n_len.keys()):
+        n_samples = n_len[peptide_length]
+        peptides.append(
+            sample_peptides(hs_uniprot_str, peptide_length, n_samples)
+        )
+    return peptides
+
+
+def attach_pseudosequence(epitope_df: pd.DataFrame) -> pd.Series:
+    """Returns a series of corresponding pseudosequences
+
+    Args:
+        fcontent (pd.DataFrame): peptide and associated MHC source information
+
+    Returns:
+        pd.Series: allelelist and mhcii molecules
+    """
+    mhcii_pseudosequences = load_pseudosequences()
+    return epitope_df.merge(
+        mhcii_pseudosequences,
+        how="outer",
+        left_on="MHC_molecule",
+        right_on="Name",
+    ).dropna()["Pseudosequence"]
+
+
+def assign_pseudosequences(
+    ligands: pd.DataFrame, decoys: pd.DataFrame
+) -> pd.DataFrame:
+    """Assigns pseudosequences to ligands appropriately.
+
+    Args:
+        ligands (pd.DataFrame): ligands
+        decoys (pd.DataFrame): decoys (negative data)
+
+    Returns:
+        pd.DataFrame: decoys with assigned pseudosequences
+    """
+    decoys["Pseudosequence"] = "Placeholder"
+    for index, value in (
+        ligands[["Sequence Length", "Pseudosequence"]]
+        .value_counts()
+        .iteritems()
+    ):
+        peptide_length = index[0]
+        pseudosequence = index[1]
+
+        assigned = (
+            decoys.loc[
+                (decoys.Sequence.str.len() == peptide_length)
+                & (decoys["Pseudosequence"] == "Placeholder")
+            ]
+            .sample(n=value)
+            .assign(Pseudosequence=pseudosequence)
+        )
+        decoys.loc[
+            decoys.Sequence.isin(assigned.Sequence), "Pseudosequence"
+        ] = assigned.Pseudosequence
+
+    return decoys
