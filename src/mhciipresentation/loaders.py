@@ -23,7 +23,6 @@ from mhciipresentation.paths import (
     CACHE_DIR,
     DATA_DIR,
     ENCODED_DATA,
-    MOUSE_PUBLIC,
     PROCESSED_DATA,
     PSEUDOSEQUENCES,
     RAW_DATA,
@@ -52,7 +51,7 @@ def load_sa_el_data() -> pd.DataFrame:
     Returns:
         pd.DataFrame: SA EL data
     """
-    return pd.read_csv(PROCESSED_DATA + "sa_el_data.csv", index_col=0)
+    return pd.read_csv(PROCESSED_DATA + "iedb_sa_data.csv", index_col=0)
 
 
 def load_sa_data() -> pd.DataFrame:
@@ -143,11 +142,11 @@ def load_training_data() -> Tuple[sparse.csr.csr_matrix, np.ndarray]:
         Tuple[sparse.csr.csr_matrix, np.ndarray]: [description]
     """
     # Load features
-    features = sparse.load_npz(ENCODED_DATA + "encoded_sa_el_features.npz")
+    features = sparse.load_npz(ENCODED_DATA / "encoded_sa_el_features.npz")
 
     # Load labels
     labels = pd.read_csv(
-        ENCODED_DATA + "encoded_sa_el_labels.csv", index_col=0
+        ENCODED_DATA / "encoded_sa_el_labels.csv", index_col=0
     )
 
     return features, labels
@@ -163,7 +162,7 @@ def load_raw_file(fname: str) -> pd.DataFrame:
         pd.DataFrame: loaded files
     """
     df = pd.read_csv(
-        RAW_DATA + fname, names=RAW_PUBLIC_FILE_COL_NAMES, sep="\t"
+        RAW_DATA / fname, names=RAW_PUBLIC_FILE_COL_NAMES, sep="\t"
     )
     return df
 
@@ -193,7 +192,7 @@ def load_public_mouse_data() -> pd.DataFrame:
         pd.DataFrame: preprocessed mouse data.
     """
     return pd.read_csv(
-        MOUSE_PUBLIC + "preprocessed_public_mouse_data.csv", index_col=0
+        MOUSE_PUBLIC / "preprocessed_public_mouse_data.csv", index_col=0
     )
 
 
@@ -204,7 +203,7 @@ def load_public_mouse_train_data() -> pd.DataFrame:
     Returns:
         pd.DataFrame: preprocessed mouse data.
     """
-    return pd.read_csv(MOUSE_PUBLIC + "train_set.csv", index_col=0)
+    return pd.read_csv(MOUSE_PUBLIC / "train_set.csv", index_col=0)
 
 
 def load_K562_dataset() -> Tuple[pd.DataFrame, pd.DataFrame]:
@@ -214,7 +213,7 @@ def load_K562_dataset() -> Tuple[pd.DataFrame, pd.DataFrame]:
         Tuple[pd.DataFrame, pd.DataFrame]: [description]
     """
     supp_tables = pd.ExcelFile(
-        DATA_DIR + "maria_data/supplementary_tables.xlsx"
+        DATA_DIR / "maria_data/supplementary_tables.xlsx"
     )
     DRB1_0101_ligands = supp_tables.parse("TableS5", header=1)
     DRB1_0404_ligands = supp_tables.parse("TableS6", header=1)
@@ -242,9 +241,9 @@ def load_uniprot() -> pd.DataFrame:
         "Sequence Version",
     ]
     uniprot = pd.DataFrame(columns=uniprot_columns)
-    if not Path(CACHE_DIR + "uniprot_df_shard_1.csv").is_file():
+    if not Path(CACHE_DIR / "uniprot_df_shard_1.csv").is_file():
         # Caching results
-        with open(DATA_DIR + "uniprot/uniprot_sprot.fasta") as handle:
+        with open(DATA_DIR / "uniprot/uniprot_sprot.fasta") as handle:
             seq_counter = 0
             file_counter = 0
             for values in tqdm(SimpleFastaParser(handle)):
@@ -309,7 +308,7 @@ def load_uniprot() -> pd.DataFrame:
                 )
                 if seq_counter % 10000 == 0:
                     uniprot.to_csv(
-                        CACHE_DIR + f"uniprot_df_shard_{file_counter}.csv"
+                        CACHE_DIR / f"uniprot_df_shard_{file_counter}.csv"
                     )
                     file_counter += 1
                     uniprot = pd.DataFrame(columns=uniprot_columns)
@@ -322,7 +321,7 @@ def load_uniprot() -> pd.DataFrame:
         ]
         uniprot = pd.DataFrame(columns=uniprot_columns)
         for shard in uniprot_shards:
-            uniprot_shard_df = pd.read_csv(CACHE_DIR + shard, index_col=0)
+            uniprot_shard_df = pd.read_csv(CACHE_DIR / shard, index_col=0)
             uniprot = uniprot.append(uniprot_shard_df)
     return uniprot
 
@@ -335,7 +334,7 @@ def load_melanoma_dataset() -> pd.DataFrame:
         pd.DataFrame: melanoma dataset with cleaned columns.
     """
     melanoma_excel_file = pd.ExcelFile(
-        DATA_DIR + "maria_data/melanoma_untyped.xlsx"
+        DATA_DIR / "maria_data/melanoma_untyped.xlsx"
     )
     melanoma_table = melanoma_excel_file.parse(
         "Supplementary data 2", header=1

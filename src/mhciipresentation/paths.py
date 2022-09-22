@@ -15,7 +15,7 @@ Provides global variables to other scripts used in the repository
         RAW_DATA (str): directory where the raw data is stored
         XGBOOST_MODEL_DIRS (str): directory where the xgboost models is stored
         PROCESSED_DATA (str): directory where processed data (i.e.
-        non-raw, so it includes temporary files)
+        non-raw) so it includes temporary files)
         ENCODED_DATA_PATH (str): directory where the encoded data is stored.
         This can be used as input for models
         PREDICTION_PATH (str): directory to store predictions
@@ -29,45 +29,45 @@ Provides global variables to other scripts used in the repository
         MOUSE_PUBLIC (str): directory containing the public mouse data
 """
 import os
+from pathlib import Path
 
-SRC_DIR = os.path.dirname(os.path.realpath(__file__))
+from pyprojroot import here
 
-CACHE_DIR = "/scratch/$USER/.cache/"
+CACHE_DIR = here() / Path(".cache/")
 
-DATA_DIR = os.path.abspath(
-    os.path.join(SRC_DIR, "../../data/mhciipresentation/")
-)
+DATA_DIR = here() / Path("./data/")
 
-SPLITS_DIR = os.path.join(DATA_DIR, "splits/")
+LOGS_DIR = here() / Path("./logs")
 
-LOG_DIR = os.path.join(DATA_DIR, "modelling/logs/")
+SPLITS_DIR = DATA_DIR / "splits/"
 
-MODELS_DIR = os.path.join(DATA_DIR, "modelling/")
+LOG_DIR = DATA_DIR / "modelling/logs/"
 
-PROD_MODELS_DIR = os.path.join(DATA_DIR, "models/")
+MODELS_DIR = DATA_DIR / "modelling/"
 
-PSEUDOSEQUENCES = os.path.join(DATA_DIR, "pseudosequence_mappings/")
+PROD_MODELS_DIR = DATA_DIR / "models/"
 
-TRAIN_LOG = os.path.join(LOG_DIR, "training_logs/")
+PSEUDOSEQUENCES = DATA_DIR / "pseudosequence_mappings/"
 
-RAW_DATA = os.path.join(DATA_DIR, "datasets/")
+TRAIN_LOG = LOGS_DIR / "training_logs/"
 
-EPITOPES_DIR = os.path.join(DATA_DIR, "eval/")
+RAW_DATA = DATA_DIR / "raw/"
 
-XGBOOST_MODEL = os.path.join(DATA_DIR, "modelling/1-xgboost/")
+EPITOPES_DIR = DATA_DIR / "eval/"
 
-PROCESSED_DATA = os.path.join(DATA_DIR, "processed/0-preprocessed/")
+XGBOOST_MODEL = DATA_DIR / "modelling/1-xgboost/"
 
-LEVENSTEIN_DIR = os.path.join(DATA_DIR, "processed/levenstein/")
+PROCESSED_DATA = DATA_DIR / "processed/"
 
-ENCODED_DATA = os.path.join(DATA_DIR, "processed/1-encoded/")
+LEVENSTEIN_DIR = DATA_DIR / "processed/levenstein/"
 
-PREDICTION = os.path.join(DATA_DIR, "processed/2-predictions/")
+ENCODED_DATA = DATA_DIR / "processed/1-encoded/"
 
-PERFORMANCE = os.path.join(DATA_DIR, "processed/3-performance/")
+PREDICTION = DATA_DIR / "processed/2-predictions/"
 
-PLOTS = os.path.join(DATA_DIR, "plots/")
+PERFORMANCE = DATA_DIR / "processed/3-performance/"
 
-MOUSE_PUBLIC = os.path.join(DATA_DIR, "splits/mouse/random/")
+PLOTS = DATA_DIR / "plots/"
 
-PUBLIC_VAL_PERF = os.path.join(DATA_DIR, "public/validation_performance/")
+
+PUBLIC_VAL_PERF = DATA_DIR / "public/validation_performance/"
