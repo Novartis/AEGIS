@@ -222,42 +222,10 @@ def random_splitting_mouse(data: pd.DataFrame) -> None:
     label_dist_summary(X_test_data, "label", "testing")
 
     # Writing the data
-    out_dir = SPLITS_DIR / "mouse" / "random"
+    out_dir = SPLITS_DIR / "random_nod"
     make_dir(out_dir)
     save_idx(out_dir, X_train_data, X_val_data, X_test_data)
     print("Written random splits successfully")
-
-
-def motif_exclusion(data: pd.DataFrame) -> None:
-    list_of_peptide_files = select_data_files(os.listdir(RAW_DATA))
-    list_of_peptide_files.sort()
-    raw_files = load_raw_files(list_of_peptide_files)
-    data_with_filename = data.merge(
-        raw_files[["peptide", "file_name"]].drop_duplicates(),
-        how="left",
-        on="peptide",
-    )
-
-    motifs_splits_dir = SPLITS_DIR + "/motifs/"
-    make_dir(motifs_splits_dir)
-
-    for i in range(N_MOTIF_FOLDS):
-        X_train = data_with_filename.loc[
-            data_with_filename.file_name == f"train_EL{i+1}.txt"
-        ]
-        X_train = data.loc[data.peptide.isin(X_train.peptide.tolist())]
-
-        X_val = data_with_filename.loc[
-            data_with_filename.file_name == f"test_EL{i+1}.txt"
-        ]
-        X_val = data.loc[data.peptide.isin(X_val.peptide.tolist())]
-        label_dist_summary(X_train, "target_value", "training")
-        label_dist_summary(X_val, "target_value", "validation")
-        validate_split(X_train.peptide, X_val.peptide)
-        out_dir = motifs_splits_dir + f"/split_{i+1}/"
-        make_dir(out_dir)
-        save_idx(out_dir, X_train, X_val)
-        print(f"Done with split {i+1}")
 
 
 def main():
@@ -265,7 +233,7 @@ def main():
     sa_data = load_sa_data()
     random_splitting(
         sa_data,
-        out_dir=SPLITS_DIR / "random_sa/",
+        out_dir=SPLITS_DIR / "random_iedb/",
         val_frac=0.5,
         eval_frac=0.05,
     )
