@@ -20,7 +20,7 @@ from tqdm import tqdm
 
 from mhciipresentation.constants import LEN_BOUNDS_MOUSE, PTM_LIST
 from mhciipresentation.errors import FormatError, SamplingSizeError
-from mhciipresentation.paths import MOUSE_PUBLIC
+from mhciipresentation.paths import PROCESSED_DATA, RAW_DATA
 from mhciipresentation.utils import (
     generate_negative_peptides,
     get_peptide_context,
@@ -76,19 +76,19 @@ def parse_protein_data() -> pd.Series:
         pd.DataFrame: parse protein data
     """
     protein_sequences_1 = parse_protein_sequences_xml_file(
-        MOUSE_PUBLIC + "Unanue_7733_180712_05.mzid"
+        RAW_DATA / "Unanue_7733_180712_05.mzid"
     )
     protein_sequences_2 = parse_protein_sequences_xml_file(
-        MOUSE_PUBLIC + "Unanue_7872_190321_06.mzid"
+        RAW_DATA / "Unanue_7872_190321_06.mzid"
     )
     protein_sequences_3 = parse_protein_sequences_xml_file(
-        MOUSE_PUBLIC + "Unanue_7715_180601_08.mzid"
+        RAW_DATA / "Unanue_7715_180601_08.mzid"
     )
     protein_sequences_4 = parse_protein_sequences_xml_file(
-        MOUSE_PUBLIC + "Unanue_7797-7873.mzid"
+        RAW_DATA / "Unanue_7797-7873.mzid"
     )
     protein_sequences_5 = parse_protein_sequences_xml_file(
-        MOUSE_PUBLIC + "Unanue_7681-7683-7707-7772.mzid"
+        RAW_DATA / "Unanue_7681-7683-7707-7772.mzid"
     )
     return (
         pd.concat(
@@ -115,7 +115,7 @@ def parse_peptide_data() -> Tuple[pd.DataFrame, pd.DataFrame]:
     Returns:
         Tuple[pd.DataFrame,pd.DataFrame]: peptide without and with accession numbers
     """
-    xl_file = MOUSE_PUBLIC + "NIHMS1556366-supplement-SuppTables1-5-5.xlsx"
+    xl_file = RAW_DATA / "NIHMS1556366-supplement-SuppTables1-5-5.xlsx"
     if not os.path.isfile(xl_file):
         raise FileNotFoundError("The Excel file was not found.")
 
@@ -227,7 +227,10 @@ def clean_negative_peptides(peptides: pd.Series) -> pd.Series:
     )
 
 
-def filter_length(series: pd.Series, bounds: tuple,) -> pd.Series:
+def filter_length(
+    series: pd.Series,
+    bounds: tuple,
+) -> pd.Series:
     """Filters a dataframe `column` by string length as given by `bounds`.
 
     Args:
@@ -296,7 +299,13 @@ def compute_ptm_able_aa_per_peptide(
 
 def compute_ptm_per_peptide_length(
     df: pd.DataFrame,
-    columns_to_count=["peptide_length", "PTM_c", "PTM_m", "PTM_q", "PTM_n",],
+    columns_to_count=[
+        "peptide_length",
+        "PTM_c",
+        "PTM_m",
+        "PTM_q",
+        "PTM_n",
+    ],
 ) -> pd.DataFrame:
     """Computes the amount of samples per combination of PTM and peptide lengths
 
@@ -429,7 +438,8 @@ def insert_ptms_in_peptides(
                 modified_peptide = modified_peptide.replace(aa, aa.lower())
             elif n_ptms[f"n_{aa.lower()}"] != 0:
                 idx_of_ptm_able_aa_to_replace = random.sample(
-                    range(row[f"PTM_able_{aa}"]), n_ptms[f"n_{aa.lower()}"],
+                    range(row[f"PTM_able_{aa}"]),
+                    n_ptms[f"n_{aa.lower()}"],
                 )
                 idx_of_ptm_able_aa = [
                     i
@@ -582,7 +592,7 @@ def main():
     data = positive_data.append(negative_data)
     data = data.sample(frac=1)
     data = data.reset_index(drop=True)
-    data.to_csv(MOUSE_PUBLIC + "preprocessed_public_mouse_data.csv")
+    data.to_csv(PROCESSED_DATA / "preprocessed_public_mouse_data.csv")
 
 
 if __name__ == "__main__":

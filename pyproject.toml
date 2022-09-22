@@ -50,6 +50,13 @@ torchvision = "^0.13.1"
 mkdocs-material = "^8.5.3"
 mkdocstrings = "^0.19.0"
 mkdocstrings-python = "^0.7.1"
+biopython = "^1.79"
+scipy = "^1.9.1"
+tqdm = "^4.64.1"
+matplotlib = "^3.6.0"
+scikit-learn = "^1.1.2"
+pyprojroot = "^0.2.0"
+openpyxl = "^3.0.10"
 
 [tool.poetry.dev-dependencies]
 
