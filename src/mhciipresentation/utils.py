@@ -137,22 +137,16 @@ def uniquify(input_seq: list, suffs: Iterator[int] = count(1)):
     return seq
 
 
-def make_dir(directory: str) -> None:
+def make_dir(directory: Path) -> None:
     """Makes directory and does not stop if it is already created.
 
+    TODO: since converting to pathlib, this function is not needed anymore.
+
     Args:
-        directory (str): directory to be created
+        directory (Path): directory to be created
     """
 
-    try:
-        os.mkdir(directory)
-    except OSError:
-        print(
-            f"Creation of the directory {directory} failed, probably already "
-            f"exists"
-        )
-    else:
-        print(f"Successfully created the directory {directory}")
+    Path(directory).mkdir(parents=True, exist_ok=True)
 
 
 def aa_seq_to_int(s: str, aa_to_int: dict) -> List[int]:
@@ -223,7 +217,8 @@ def add_peptide_context(
 
 
 def join_peptide_with_pseudosequence(
-    peptide_with_context: pd.Series, pseudosequence: pd.Series,
+    peptide_with_context: pd.Series,
+    pseudosequence: pd.Series,
 ) -> pd.Series:
     """Adds the peptide, pads it and appends the associated pseudosequence.
         Given a peptide ABCDEF and and a pseudosequence HIJK, the function

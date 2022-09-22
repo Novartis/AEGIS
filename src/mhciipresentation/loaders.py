@@ -37,7 +37,7 @@ def load_pseudosequences() -> pd.DataFrame:
         pd.DataFrame: pseudosequences for most known human/mouse alleles.
     """
     mhcii_pseudosequences = pd.read_csv(
-        os.path.join(PSEUDOSEQUENCES + "pseudosequence_mapping.dat"),
+        os.path.join(PSEUDOSEQUENCES / "pseudosequence_mapping.dat"),
         sep="\t",
         names=["Name", "Pseudosequence"],
         index_col=0,
@@ -51,7 +51,7 @@ def load_sa_el_data() -> pd.DataFrame:
     Returns:
         pd.DataFrame: SA EL data
     """
-    return pd.read_csv(PROCESSED_DATA + "iedb_sa_data.csv", index_col=0)
+    return pd.read_csv(PROCESSED_DATA / "iedb_sa_data.csv", index_col=0)
 
 
 def load_sa_data() -> pd.DataFrame:
@@ -60,7 +60,7 @@ def load_sa_data() -> pd.DataFrame:
     Returns:
         pd.DataFrame: BA + EL data.
     """
-    return pd.read_csv(PROCESSED_DATA + "sa_data.csv", index_col=0)
+    return pd.read_csv(PROCESSED_DATA / "sa_data.csv", index_col=0)
 
 
 def load_sa_el_random_idx() -> Tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
@@ -71,9 +71,9 @@ def load_sa_el_random_idx() -> Tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
             indices.
     """
     in_dir = SPLITS_DIR + "/random/"
-    X_train_idx = pd.read_csv(in_dir + "X_train_idx.csv")
-    X_val_idx = pd.read_csv(in_dir + "X_val_idx.csv")
-    X_test_idx = pd.read_csv(in_dir + "X_test_idx.csv")
+    X_train_idx = pd.read_csv(in_dir / "X_train_idx.csv")
+    X_val_idx = pd.read_csv(in_dir / "X_val_idx.csv")
+    X_test_idx = pd.read_csv(in_dir / "X_test_idx.csv")
     return X_train_idx, X_val_idx, X_test_idx
 
 
@@ -84,7 +84,7 @@ def load_sa_random_idx() -> Tuple[pd.DataFrame, pd.DataFrame]:
         Tuple[pd.DataFrame, pd.DataFrame]: indices of train and validation sets
             to index sa_data.
     """
-    in_dir = SPLITS_DIR + "/random_sa/"
+    in_dir = SPLITS_DIR / "/random_sa/"
     X_train_idx = pd.read_csv(in_dir + "X_train_idx.csv")
     X_val_idx = pd.read_csv(in_dir + "X_val_idx.csv")
     return X_train_idx, X_val_idx
@@ -98,10 +98,10 @@ def load_mouse_random_idx() -> Tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
         Tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]: data with randomized
         index
     """
-    in_dir = SPLITS_DIR + "/mouse/random/"
-    X_train_idx = pd.read_csv(in_dir + "X_train_idx.csv")
-    X_val_idx = pd.read_csv(in_dir + "X_val_idx.csv")
-    X_test_idx = pd.read_csv(in_dir + "X_test_idx.csv")
+    in_dir = SPLITS_DIR / "/mouse/random/"
+    X_train_idx = pd.read_csv(in_dir / "X_train_idx.csv")
+    X_val_idx = pd.read_csv(in_dir / "X_val_idx.csv")
+    X_test_idx = pd.read_csv(in_dir / "X_test_idx.csv")
     return X_train_idx, X_val_idx, X_test_idx
 
 
@@ -115,8 +115,8 @@ def load_motif_exclusion_idx(fold: int) -> Tuple[pd.DataFrame, pd.DataFrame]:
         Tuple[pd.DataFrame, pd.DataFrame]: loaded train/val split using index.
     """
     in_dir = SPLITS_DIR + "/motifs/"
-    X_train_idx = pd.read_csv(in_dir + f"split_{fold}/" + "X_train_idx.csv")
-    X_val_idx = pd.read_csv(in_dir + f"split_{fold}/" + "X_val_idx.csv")
+    X_train_idx = pd.read_csv(in_dir / f"split_{fold}/" / "X_train_idx.csv")
+    X_val_idx = pd.read_csv(in_dir / f"split_{fold}/" / "X_val_idx.csv")
     return X_train_idx, X_val_idx
 
 
@@ -128,10 +128,10 @@ def load_sa_el_levenstein_idx() -> Tuple[
     Returns:
         Tuple[ pd.DataFrame, pd.DataFrame, pd.DataFrame ]: Levenstein
     """
-    in_dir = SPLITS_DIR + "/levenstein/"
-    X_train_idx = pd.read_csv(in_dir + "X_train_idx.csv")
-    X_val_idx = pd.read_csv(in_dir + "X_val_idx.csv")
-    X_test_idx = pd.read_csv(in_dir + "X_test_idx.csv")
+    in_dir = SPLITS_DIR / "/levenstein/"
+    X_train_idx = pd.read_csv(in_dir / "X_train_idx.csv")
+    X_val_idx = pd.read_csv(in_dir / "X_val_idx.csv")
+    X_test_idx = pd.read_csv(in_dir / "X_test_idx.csv")
     return X_train_idx, X_val_idx, X_test_idx
 
 
@@ -192,7 +192,7 @@ def load_public_mouse_data() -> pd.DataFrame:
         pd.DataFrame: preprocessed mouse data.
     """
     return pd.read_csv(
-        MOUSE_PUBLIC / "preprocessed_public_mouse_data.csv", index_col=0
+        PROCESSED_DATA / "preprocessed_public_mouse_data.csv", index_col=0
     )
 
 
@@ -203,7 +203,7 @@ def load_public_mouse_train_data() -> pd.DataFrame:
     Returns:
         pd.DataFrame: preprocessed mouse data.
     """
-    return pd.read_csv(MOUSE_PUBLIC / "train_set.csv", index_col=0)
+    return pd.read_csv(RAW_DATA / "train_set.csv", index_col=0)
 
 
 def load_K562_dataset() -> Tuple[pd.DataFrame, pd.DataFrame]:
