@@ -1,5 +1,6 @@
 # Custom directories
 data/
+logs/
 
 ### macOS ###
 # General

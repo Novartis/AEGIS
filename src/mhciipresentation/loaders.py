@@ -63,14 +63,28 @@ def load_sa_data() -> pd.DataFrame:
     return pd.read_csv(PROCESSED_DATA / "sa_data.csv", index_col=0)
 
 
-def load_sa_el_random_idx() -> Tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
+def load_iedb_idx() -> Tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
     """Loads SA EL radom indexes with peptide exclusion.
 
     Returns:
         Tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]: train, val and test
             indices.
     """
-    in_dir = SPLITS_DIR + "/random/"
+    in_dir = SPLITS_DIR / "random_iedb/"
+    X_train_idx = pd.read_csv(in_dir / "X_train_idx.csv")
+    X_val_idx = pd.read_csv(in_dir / "X_val_idx.csv")
+    X_test_idx = pd.read_csv(in_dir / "X_test_idx.csv")
+    return X_train_idx, X_val_idx, X_test_idx
+
+
+def load_nod_idx() -> Tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
+    """Loads SA EL radom indexes with peptide exclusion.
+
+    Returns:
+        Tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]: train, val and test
+            indices.
+    """
+    in_dir = SPLITS_DIR / "random_nod/"
     X_train_idx = pd.read_csv(in_dir / "X_train_idx.csv")
     X_val_idx = pd.read_csv(in_dir / "X_val_idx.csv")
     X_test_idx = pd.read_csv(in_dir / "X_test_idx.csv")
@@ -184,7 +198,7 @@ def load_raw_files(list_of_peptide_files: List) -> pd.DataFrame:
     return loaded_data
 
 
-def load_public_mouse_data() -> pd.DataFrame:
+def load_nod_data() -> pd.DataFrame:
     """Load peprocessed mouse data
     Source: https://www.nature.com/articles/s41590-020-0623-7.pdf?proof=t
 
@@ -194,6 +208,15 @@ def load_public_mouse_data() -> pd.DataFrame:
     return pd.read_csv(
         PROCESSED_DATA / "preprocessed_public_mouse_data.csv", index_col=0
     )
+
+
+def load_iedb_data() -> pd.DataFrame:
+    """Loads preprocessed iedb data.
+
+    Returns:
+        pd.DataFrame: IEDB data.
+    """
+    return pd.read_csv(PROCESSED_DATA / "sa_data.csv", index_col=0)
 
 
 def load_public_mouse_train_data() -> pd.DataFrame:
