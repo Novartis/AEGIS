@@ -50,7 +50,7 @@ def check_cache(input_file: str):
     if (
         not Path(CACHE_DIR).exists()
         or FORCE_PREPROCESSING
-        or not Path(CACHE_DIR + input_file).exists()
+        or not Path(CACHE_DIR / input_file).exists()
     ):
         make_dir(CACHE_DIR)
         return False
@@ -299,7 +299,7 @@ def prepare_batch(
             (batch_size, pad_width) and reshaped labels
     """
     dataset_size = len(features)
-    if not labels:
+    if labels is None:
         labels = np.zeros(len(features))
 
     batch_in = []
@@ -579,7 +579,7 @@ def save_model(model: nn.Module, out_dir: str) -> None:
     torch.save(model.state_dict(), out_dir)
 
 
-def save_training_params(training_params: Dict, out_dir: str) -> None:
+def save_training_params(training_params: Dict, out_dir: Path) -> None:
     """Saves a .json file with the training hyperparameters of the model
 
     Args:
@@ -587,7 +587,7 @@ def save_training_params(training_params: Dict, out_dir: str) -> None:
             training
         out_dir (str): where to save training_params
     """
-    with open(out_dir + "training_params.json", "w") as outfile:
+    with open(out_dir / "training_params.json", "w") as outfile:
         json.dump(training_params, outfile)
 
 

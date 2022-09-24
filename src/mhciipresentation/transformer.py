@@ -8,11 +8,13 @@ peptides as presented or not presented according to the peptide, peptide context
 and pseudosequence of the MHCII with which the peptide was eluted.
 
 """
+import argparse
 import json
 import os
 import pprint
 import time
 from datetime import datetime
+from pathlib import Path
 from typing import Dict, Tuple
 
 import numpy as np
@@ -33,13 +35,10 @@ from mhciipresentation.constants import (
     USE_SUBSET,
 )
 from mhciipresentation.loaders import (
-    load_motif_exclusion_idx,
-    load_mouse_random_idx,
-    load_pseudosequences,
-    load_public_mouse_data,
-    load_sa_data,
-    load_sa_el_data,
-    load_sa_el_random_idx,
+    load_iedb_data,
+    load_iedb_idx,
+    load_nod_data,
+    load_nod_idx,
     load_sa_random_idx,
 )
 from mhciipresentation.models import TransformerModel
@@ -201,19 +200,18 @@ def train(
     return sum(epoch_loss) / len(epoch_loss)
 
 
-def main():
-    """Main function to train the transformer on the sa el public data"""
-    set_seeds()
-
-    use_cache = check_cache("preprocessed_cached_sa_data.csv")
-    if use_cache:
+def prepare_iedb_data() -> Tuple[
+    pd.DataFrame,
+    pd.DataFrame,
+    pd.DataFrame,
+    np.ndarray,
+    np.ndarray,
+    np.ndarray,
+]:
+    cache_file = Path("./.cache/sa_data_ready_for_modelling.csv")
+    if not cache_file.is_file():
         print("Loading Data")
-        sa_data = pd.read_csv(
-            CACHE_DIR + "preprocessed_cached_sa_data.csv", index_col=0
-        )
-    else:
-        print("Loading Data")
-        sa_data = load_sa_data()
+        sa_data = load_iedb_data()
 
         print("Adding peptide context")
         sa_data["peptide_with_context"] = add_peptide_context(
@@ -234,65 +232,126 @@ def main():
             sa_data["peptide"],
             sa_data["Pseudosequence"],
         )
+        sa_data.to_csv(cache_file)
+    else:
+        print("Loading cached data.")
+        sa_data = pd.read_csv(cache_file, index_col=0)
 
-        sa_data[
-            [
-                "peptide",
-                "target_value",
-                "peptide_with_context",
-                "Pseudosequence",
-                "peptide_with_mhcii_pseudosequence",
-                "peptide_with_context_and_mhcii_pseudosequence",
-            ]
-        ].to_csv(CACHE_DIR + "preprocessed_cached_sa_data.csv")
+    X_train_idx_iedb, X_val_idx_iedb, X_test_idx_iedb = load_iedb_idx()
 
-    # print("Preparing epitope dataset.")
-    # epitope_df = epitope_file_parser(EPITOPES_DIR + "CD4_epitopes.fsa")
-    # epitope_df["Pseudosequence"] = get_pseudosequence(epitope_df)
-
-    # non_presented_peptides_bounds = (
-    #     (LEN_BOUNDS_HUMAN[0], LEN_BOUNDS_HUMAN[1])
-    #     if USE_CONTEXT
-    #     else LEN_BOUNDS_HUMAN
-    # )
-
-    # epitope_data = generate_epitope_data(
-    #     epitope_df, non_presented_peptides_bounds
-    # )
-    # epitope_df = prepare_val_set(epitope_data)
-
-    mouse_data = load_public_mouse_data()
-    out_dir = SPLITS_DIR + "/mouse/" + "/random/"
-    train_data = pd.read_csv(out_dir + "X_train.csv")
-    train_data = train_data.loc[train_data["Peptide Sequence"].str.len() <= 25]
-
-    val_data = pd.read_csv(out_dir + "X_val.csv")
-    val_data = val_data.loc[val_data["Peptide Sequence"].str.len() <= 25]
-
-    X_train_mouse = train_data["Peptide Sequence"]
-    y_train_mouse = train_data["label"].values
-
-    X_val_mouse = val_data["Peptide Sequence"]
-    y_val_mouse = val_data["label"].values
-
-    print("Building directories to save checkpoints and logging metrics")
-    now = datetime.now()
-    training_start_time = now.strftime("%m-%d-%Y-%H-%M-%S")
-    base_log_dir = (
-        DATA_DIR + "/modelling/transformer_human/" + training_start_time + "/"
+    X_train_iedb = sa_data.iloc[X_train_idx_iedb["index"]]
+    X_val_iedb = sa_data.iloc[X_val_idx_iedb["index"]]
+    X_test_iedb = sa_data.iloc[X_test_idx_iedb["index"]]
+    y_train_iedb, y_val_iedb, y_test_iedb = (
+        X_train_iedb.target_value.values,
+        X_val_iedb.target_value.values,
+        X_test_iedb.target_value.values,
     )
-    make_dir(base_log_dir)
-    log_dir = base_log_dir + "sa_data_with_nod/"
-    make_dir(log_dir)
-    print("Load indices and split data according to those")
-    X_train_idx, X_val_idx = load_sa_random_idx()
+    return (
+        X_train_iedb,
+        X_val_iedb,
+        X_test_iedb,
+        y_train_iedb,
+        y_val_iedb,
+        y_test_iedb,
+    )
 
-    X_train = sa_data.iloc[list(X_train_idx["index"].values)].peptide
-    X_val = sa_data.iloc[list(X_val_idx["index"].values)].peptide
 
-    X_train = pd.concat([X_train, X_train_mouse])
-    X_val = pd.concat([X_val, X_val_mouse])
+def prepare_nod_data():
+    nod_data = load_nod_data()
+    X_train_idx_nod, X_val_idx_nod, X_test_idx_nod = load_nod_idx()
+    X_train_nod = nod_data.iloc[X_train_idx_nod["index"]].rename(
+        columns={"Peptide Sequence": "peptide"}
+    )
+    X_val_nod = nod_data.iloc[X_val_idx_nod["index"]].rename(
+        columns={"Peptide Sequence": "peptide"}
+    )
+    X_test_nod = nod_data.iloc[X_test_idx_nod["index"]].rename(
+        columns={"Peptide Sequence": "peptide"}
+    )
+    y_train_nod, y_val_nod, y_test_nod = (
+        X_train_nod.label.values,
+        X_val_nod.label.values,
+        X_test_nod.label.values,
+    )
+    return (
+        X_train_nod,
+        X_val_nod,
+        X_test_nod,
+        y_train_nod,
+        y_val_nod,
+        y_test_nod,
+    )
 
+
+def prepare_data() -> Tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
+    if "iedb" in FLAGS.data_source:
+        (
+            X_train_iedb,
+            X_val_iedb,
+            X_test_iedb,
+            y_train_iedb,
+            y_val_iedb,
+            y_test_iedb,
+        ) = prepare_iedb_data()
+        if FLAGS.data_source == "iedb":
+            return (
+                X_train_iedb,
+                X_val_iedb,
+                X_test_iedb,
+                y_train_iedb,
+                y_val_iedb,
+                y_test_iedb,
+            )
+    if "nod" in FLAGS.data_source:
+        (
+            X_train_nod,
+            X_val_nod,
+            X_test_nod,
+            y_train_nod,
+            y_val_nod,
+            y_test_nod,
+        ) = prepare_nod_data()
+        if FLAGS.data_source == "nod":
+            return (
+                X_train_nod,
+                X_val_nod,
+                X_test_nod,
+                y_train_nod,
+                y_val_nod,
+                y_test_nod,
+            )
+    if FLAGS.data_source == "iedb_nod":
+        X_train = pd.concat([X_train_iedb, X_train_nod])
+        X_val = pd.concat([X_val_iedb, X_val_nod])
+        X_test = pd.concat([X_test_iedb, X_test_nod])
+        y_train = np.hstack([y_train_iedb, y_train_nod])
+        y_val = np.hstack([y_val_iedb, y_val_nod])
+        y_test = np.hstack([y_test_nod, y_test_nod])
+        return (X_train, X_val, X_test, y_train, y_val, y_test)
+
+
+def select_features(X_train, X_val, X_test):
+    if FLAGS.features == "seq_only":
+        relevant_col = "peptide"
+    else:
+        relevant_col = "peptide_with_mhcii_pseudosequence"
+
+    return (
+        X_train[relevant_col],
+        X_val[relevant_col],
+        X_test[relevant_col],
+    )
+
+
+def main():
+    """Main function to train the transformer on the iedb data and sa dataset"""
+    set_seeds()
+    X_train, X_val, X_test, y_train, y_val, y_test = prepare_data()
+    X_train, X_val, X_test = select_features(X_train, X_val, X_test)
+    longest_input = max(
+        [X_train.map(len).max(), X_val.map(len).max(), X_test.map(len).max()]
+    )
     X_train = encode_aa_sequences(
         X_train,
         AA_TO_INT,
@@ -301,17 +360,6 @@ def main():
         X_val,
         AA_TO_INT,
     )
-
-    # X_val = encode_aa_sequences(
-    #     epitope_df.peptide_with_mhcii_pseudosequence, AA_TO_INT,
-    # )
-
-    y_train = sa_data.iloc[X_train_idx["index"].tolist()].target_value.values
-    y_val = sa_data.iloc[X_val_idx["index"].tolist()].target_value.values
-
-    y_train = np.hstack([y_train, y_train_mouse])
-    y_val = np.hstack([y_val, y_val_mouse])
-    # y_val = epitope_df.label.values
 
     X_train, y_train = shuffle_features_and_labels(X_train, y_train)
 
@@ -323,9 +371,9 @@ def main():
     epochs = 300
     criterion = nn.BCELoss()
 
-    lr = 1e-5
+    lr = float(1e-5)
     patience = 10
-    input_dim = 25 + 2  # size of longest sequence (25 + start/stop)
+    input_dim = longest_input + 2  # size of longest sequence (25 + start/stop)
     n_tokens = len(list(AA_TO_INT.values()))
     embedding_size = 128  # embedding dimension
     enc_ff_hidden = 64  # dimension of the feedforward nn model in the encoder
@@ -349,143 +397,171 @@ def main():
     )
     get_n_trainable_params(model)
     model = nn.DataParallel(model, device_ids=[0])  # type: ignore
-    try:
-        model = model.to(device) if USE_GPU else model
-        optimizer = Adam(model.parameters(), lr=lr)
-        scheduler = ExponentialLR(optimizer, gamma=0.9)
+    # try:
+    model = model.to(device) if USE_GPU else model
+    optimizer = Adam(model.parameters(), lr=lr)
+    scheduler = ExponentialLR(optimizer, gamma=0.9)
 
-        training_params = {
-            "debugging round": "no",
-            "data": "sa data random split peptide with mhcii pseudosequence. input sequence dictated by longest sequence in test set.",
-            "splitting": "random splitting with no test and val size of 0.01",
-            "start_lr": lr,
-            "scheduler": "exponential, updates every 10 epoch.",
-            "patience": patience,
-            "input_dim": input_dim,
-            "n_tokens": n_tokens,
-            "embedding_size": embedding_size,
-            "n_attn_heads": n_attn_heads,
-            "enc_ff_hidden": enc_ff_hidden,
-            "ff_hidden": ff_hidden,
-            "nlayers": nlayers,
-            "dropout": dropout,
-            "optimizer": "Adam",
-        }
+    training_params = {
+        "debugging round": "no",
+        "data": "sa data random split peptide with mhcii pseudosequence. input sequence dictated by longest sequence in test set.",
+        "splitting": "random splitting with no test and val size of 0.01",
+        "start_lr": lr,
+        "scheduler": "exponential, updates every 10 epoch.",
+        "patience": patience,
+        "input_dim": input_dim,
+        "n_tokens": n_tokens,
+        "embedding_size": embedding_size,
+        "n_attn_heads": n_attn_heads,
+        "enc_ff_hidden": enc_ff_hidden,
+        "ff_hidden": ff_hidden,
+        "nlayers": nlayers,
+        "dropout": dropout,
+        "optimizer": "Adam",
+    }
 
-        save_training_params(training_params, log_dir)
+    print("Building directories to save checkpoints and logging metrics")
+    now = datetime.now()
+    training_start_time = now.strftime("%m-%d-%Y-%H-%M-%S")
+    log_dir = Path(f"./logs/{training_start_time}")
+    make_dir(log_dir)
+    make_dir(log_dir / "metrics/")
+    make_dir(log_dir / "checkpoints/")
 
-        print("Building directories to save checkpoints and logging metrics")
-        now = datetime.now()
-        training_start_time = now.strftime("%m-%d-%Y-%H-%M-%S")
-        make_dir(log_dir)
-        make_dir(log_dir + "/metrics/")
-        make_dir(log_dir + "/checkpoints/")
+    # save_training_params(training_params, log_dir)
 
-        best_loss = 10000
-        best_matthews = 0
-        best_recall = 0
-        best_precision = 0
-        no_progress = 0
-        print("Starting training")
-        for epoch in range(1, epochs + 1):
-            epoch_start_time = time.time()
-            avg_epoch_loss = train(
-                model,
-                X_train,
-                y_train,
+    best_loss = 10000
+    best_matthews = 0
+    best_recall = 0
+    best_precision = 0
+    no_progress = 0
+    print("Starting training")
+    for epoch in range(1, epochs + 1):
+        epoch_start_time = time.time()
+        avg_epoch_loss = train(
+            model,
+            X_train,
+            y_train,
+            batch_size,
+            criterion,
+            optimizer,
+            device,
+            input_dim,
+        )
+        elapsed = time.time() - epoch_start_time
+        print(
+            f"EPOCH NO: {epoch} took {elapsed} seconds with average loss "
+            f"{avg_epoch_loss}"
+        )
+        model.eval()
+        print("Evaluating model on training and validation set")
+        with torch.no_grad():
+            idx = np.random.choice(X_train.shape[0], 100000, replace=False)
+
+            X_train_sampled = X_train[idx]
+            y_train_sampled = y_train[idx]
+
+            train_metrics = evaluate_transformer(
+                X_train_sampled,
+                y_train_sampled,
                 batch_size,
-                criterion,
-                optimizer,
                 device,
+                model,
+                "train",
                 input_dim,
+                AA_TO_INT["X"],
+                criterion,
             )
-            elapsed = time.time() - epoch_start_time
-            print(
-                f"EPOCH NO: {epoch} took {elapsed} seconds with average loss "
-                f"{avg_epoch_loss}"
+            val_metrics = evaluate_transformer(
+                X_val,
+                y_val,
+                batch_size,
+                device,
+                model,
+                "val",
+                input_dim,
+                AA_TO_INT["X"],
+                criterion,
             )
-            model.eval()
-            print("Evaluating model on training and validation set")
-            with torch.no_grad():
-                idx = np.random.choice(X_train.shape[0], 100000, replace=False)
+            epoch_metrics = {"train": train_metrics, "val": val_metrics}
 
-                X_train_sampled = X_train[idx]
-                y_train_sampled = y_train[idx]
+        if epoch % 10 == 0:
+            scheduler.step()
 
-                train_metrics = evaluate_transformer(
-                    X_train_sampled,
-                    y_train_sampled,
-                    batch_size,
-                    device,
-                    model,
-                    "train",
-                    input_dim,
-                    AA_TO_INT["X"],
-                    criterion,
-                )
-                val_metrics = evaluate_transformer(
-                    X_val,
-                    y_val,
-                    batch_size,
-                    device,
-                    model,
-                    "val",
-                    input_dim,
-                    AA_TO_INT["X"],
-                    criterion,
-                )
-                epoch_metrics = {"train": train_metrics, "val": val_metrics}
+        print("Performance data handling")
+        current_matthews = epoch_metrics["val"]["matthews_corrcoef"]
+        current_recall = epoch_metrics["val"]["recall"]
+        current_precision = epoch_metrics["val"]["precision"]
+        current_loss = epoch_metrics["val"]["loss"]
 
-            if epoch % 10 == 0:
-                scheduler.step()
-
-            print("Performance data handling")
-            current_matthews = epoch_metrics["val"]["matthews_corrcoef"]
-            current_recall = epoch_metrics["val"]["recall"]
-            current_precision = epoch_metrics["val"]["precision"]
-            current_loss = epoch_metrics["val"]["loss"]
-
-            checkpoint_fname = (
-                log_dir + "/checkpoints/" + f"checkpoint_epoch_{epoch}"
+        checkpoint_dir = log_dir / "checkpoints"
+        checkpoint_basename = f"checkpoint_epoch_{epoch}"
+        if current_matthews > best_matthews:
+            best_matthews = current_matthews
+            checkpoint_fname = checkpoint_dir / (
+                checkpoint_basename + "_best_matthews"
             )
-            if current_matthews > best_matthews:
-                best_matthews = current_matthews
-                checkpoint_fname = checkpoint_fname + "_best_matthews"
-                print("Saving best MCC model")
+            print("Saving best MCC model")
 
-            if current_recall > best_recall:
-                best_recall = current_recall
-                checkpoint_fname = checkpoint_fname + "_best_recall"
-                print("Saving best recall model")
+        if current_recall > best_recall:
+            best_recall = current_recall
+            checkpoint_fname = checkpoint_dir / (
+                checkpoint_basename + "_best_recall"
+            )
+            print("Saving best recall model")
 
-            if current_precision > best_precision:
-                best_precision = current_precision
-                checkpoint_fname = checkpoint_fname + "_best_precision"
-                print("Saving best precision model")
+        if current_precision > best_precision:
+            best_precision = current_precision
+            checkpoint_fname = checkpoint_dir / (
+                checkpoint_basename + "_best_precision"
+            )
+            print("Saving best precision model")
 
-            if current_loss < best_loss:
-                best_loss = current_loss
-                print("Saving best loss model")
+        if current_loss < best_loss:
+            best_loss = current_loss
+            print("Saving best loss model")
 
-                no_progress = 0
-            else:
-                no_progress += 1
+            no_progress = 0
+        else:
+            no_progress += 1
 
-            save_model(model, checkpoint_fname + ".pth")
-            print("Saving epoch metrics")
-            with open(f"{log_dir}/metrics/epoch_{epoch}.json", "w") as outfile:
-                json.dump(epoch_metrics, outfile)
+        save_model(model, str(checkpoint_fname + ".pth"))
+        print("Saving epoch metrics")
+        with open(f"{log_dir}/metrics/epoch_{epoch}.json", "w") as outfile:
+            json.dump(epoch_metrics, outfile)
 
-            if no_progress == patience:
-                # Early stopping
-                break
+        if no_progress == patience:
+            # Early stopping
+            break
 
-    except Exception as error:
-        raise error
-    finally:
-        torch.cuda.empty_cache()
+    # except Exception as error:
+    #     raise error
+    # finally:
+    # torch.cuda.empty_cache()
     print("Training terminated.")
 
 
 if __name__ == "__main__":
+    parser = argparse.ArgumentParser(
+        description="Train a transformer model on IEDB and/or NOD data."
+    )
+    parser.add_argument(
+        "--data_source",
+        required=False,
+        help="Type of data to use",
+        choices=["iedb", "nod", "iedb_nod"],
+        default="iedb_nod",
+    )
+    parser.add_argument(
+        "--features",
+        required=False,
+        help="Type of features to use",
+        choices=[
+            "seq_only",
+            "seq_mhc",
+        ],
+        default="seq_only",
+    )
+    args = parser.parse_args()
+    FLAGS, unparsed = parser.parse_known_args()
     main()
