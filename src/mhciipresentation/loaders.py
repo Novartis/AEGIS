@@ -24,7 +24,6 @@ from mhciipresentation.paths import (
     DATA_DIR,
     ENCODED_DATA,
     PROCESSED_DATA,
-    PSEUDOSEQUENCES,
     RAW_DATA,
     SPLITS_DIR,
 )
@@ -37,7 +36,7 @@ def load_pseudosequences() -> pd.DataFrame:
         pd.DataFrame: pseudosequences for most known human/mouse alleles.
     """
     mhcii_pseudosequences = pd.read_csv(
-        os.path.join(PSEUDOSEQUENCES / "pseudosequence_mapping.dat"),
+        os.path.join(RAW_DATA / "pseudosequence_mapping.dat"),
         sep="\t",
         names=["Name", "Pseudosequence"],
         index_col=0,

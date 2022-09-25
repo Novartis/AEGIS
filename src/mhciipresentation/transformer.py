@@ -39,6 +39,7 @@ from mhciipresentation.loaders import (
     load_iedb_idx,
     load_nod_data,
     load_nod_idx,
+    load_pseudosequences,
     load_sa_random_idx,
 )
 from mhciipresentation.models import TransformerModel
@@ -269,6 +270,38 @@ def prepare_nod_data():
     X_test_nod = nod_data.iloc[X_test_idx_nod["index"]].rename(
         columns={"Peptide Sequence": "peptide"}
     )
+
+    if FLAGS.features == "seq_mhc":
+        pseudosequences = load_pseudosequences()
+        iag7_pseudosequence = pseudosequences.loc[
+            pseudosequences.Name == "H-2-IAg7"
+        ].Pseudosequence.values[0]
+        (
+            X_train_nod["Pseudosequence"],
+            X_val_nod["Pseudosequence"],
+            X_test_nod["Pseudosequence"],
+        ) = (
+            iag7_pseudosequence,
+            iag7_pseudosequence,
+            iag7_pseudosequence,
+        )
+        X_train_nod[
+            "peptide_with_mhcii_pseudosequence"
+        ] = join_peptide_with_pseudosequence(
+            X_train_nod["peptide"], X_train_nod["Pseudosequence"]
+        )
+        X_val_nod[
+            "peptide_with_mhcii_pseudosequence"
+        ] = join_peptide_with_pseudosequence(
+            X_val_nod["peptide"], X_val_nod["Pseudosequence"]
+        )
+        X_test_nod[
+            "peptide_with_mhcii_pseudosequence"
+        ] = join_peptide_with_pseudosequence(
+            X_test_nod["peptide"], X_test_nod["Pseudosequence"]
+        )
+        print("STOP")
+
     y_train_nod, y_val_nod, y_test_nod = (
         X_train_nod.label.values,
         X_val_nod.label.values,
@@ -560,7 +593,7 @@ if __name__ == "__main__":
             "seq_only",
             "seq_mhc",
         ],
-        default="seq_only",
+        default="seq_mhc",
     )
     args = parser.parse_args()
     FLAGS, unparsed = parser.parse_known_args()

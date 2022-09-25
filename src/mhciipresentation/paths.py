@@ -47,8 +47,6 @@ MODELS_DIR = DATA_DIR / "modelling/"
 
 PROD_MODELS_DIR = DATA_DIR / "models/"
 
-PSEUDOSEQUENCES = DATA_DIR / "pseudosequence_mappings/"
-
 TRAIN_LOG = LOGS_DIR / "training_logs/"
 
 RAW_DATA = DATA_DIR / "raw/"
