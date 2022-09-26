@@ -97,6 +97,15 @@ def save_idx(
 def label_dist_summary(
     data: pd.DataFrame, target_col: str, dataset_name: str
 ) -> None:
+    """Summarizes the distribution of the two most common labels (ie 0 and 1)
+
+    Note: labels for BA data are not accounted for here, therefore do not use this for counting purposes.
+
+    Args:
+        data (pd.DataFrame): data to summarize
+        target_col (str): target column to summarize
+        dataset_name (str): name of the dataset to summarize
+    """
     value_cts = data[target_col].value_counts()
     print(
         f"Label distribution in {dataset_name}: negative samples = "
