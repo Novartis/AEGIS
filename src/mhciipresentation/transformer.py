@@ -553,7 +553,9 @@ def main():
         else:
             no_progress += 1
 
-        save_model(model, str(checkpoint_fname.with_suffix(".pth")))
+        if "best" in str(checkpoint_fname):
+            save_model(model, str(checkpoint_fname.with_suffix(".pth")))
+
         print("Saving epoch metrics")
         with open(log_dir / f"metrics/epoch_{epoch}.json", "w") as outfile:
             json.dump(epoch_metrics, outfile)
