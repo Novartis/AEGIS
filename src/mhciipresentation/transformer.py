@@ -300,7 +300,6 @@ def prepare_nod_data():
         ] = join_peptide_with_pseudosequence(
             X_test_nod["peptide"], X_test_nod["Pseudosequence"]
         )
-        print("STOP")
 
     y_train_nod, y_val_nod, y_test_nod = (
         X_train_nod.label.values,
