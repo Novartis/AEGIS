@@ -22,7 +22,7 @@ To get started working with these models:
 2. Download the data using this command [TODO: data download command]
 3. Install the dependencies with `$ poetry install`
 4. Install the `mhciipresentation` package with `$ cd mhciipresentation && pip install -e . && cd ../`
-
+5. Retrain all the model variants with `$ ./scripts/train_models.sh`
 
 <!-- # Reference -->
 <!-- ::: src.mhciipresentation.lstm.make_model -->
