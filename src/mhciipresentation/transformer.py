@@ -531,7 +531,10 @@ def main():
         if current_matthews > best_matthews:
             best_matthews = current_matthews
             checkpoint_fname = checkpoint_dir / (
-                checkpoint_basename + "_best_matthews"
+                checkpoint_basename
+                + "_features_{FLAGS.features}"
+                + "_features_{FLAGS.data_source}"
+                + "_best_matthews"
             )
             print("Saving best MCC model")
 
