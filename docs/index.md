@@ -13,19 +13,15 @@ a model.
 The repository is structured as follows:
 
 + `docs` contains all of the documentation related to the project, including this page.
-+ `archive` contains code and explorations which are not necessarily relevant to the project anymore.
 + `src` contains the source code for the code which has been tested.
 
-    - The `test` subdirectory also contains the testing suite used to validate the functions that are used.
 
-
-+ `exploration` contains code which has been used to explore the data and try out new models and preprocessing steps
-+ `data` contains a file, `data_dictionary.yaml` item IDs which can be used to retrieve the data from the DataStore
-
-
-
-# Dependencies
-You can either use a `conda` environment or `poetry` to install the dependencies of this project.
+# How to get started
+To get started working with these models:
+1. Clone this repository
+2. Download the data using this command [TODO: data download command]
+3. Install the dependencies with `$ poetry install`
+4. Install the `mhciipresentation` package with `$ cd mhciipresentation && pip install -e . && cd ../`
 
 
 <!-- # Reference -->
