@@ -9,7 +9,7 @@ This file provides constants used throughout this project.
 
 # Compute-related options
 N_JOBS = 10
-USE_GPU = False
+USE_GPU = True
 
 N_MOTIF_FOLDS = 5
 
