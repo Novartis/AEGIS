@@ -43,13 +43,7 @@ from mhciipresentation.loaders import (
     load_sa_random_idx,
 )
 from mhciipresentation.models import TransformerModel
-from mhciipresentation.paths import (
-    CACHE_DIR,
-    DATA_DIR,
-    EPITOPES_DIR,
-    RAW_DATA,
-    SPLITS_DIR,
-)
+from mhciipresentation.paths import LOGS_DIR
 from mhciipresentation.utils import (
     add_peptide_context,
     check_cache,
@@ -456,6 +450,7 @@ def main():
     now = datetime.now()
     training_start_time = now.strftime("%m-%d-%Y-%H-%M-%S")
     log_dir = Path(f"./logs/{training_start_time}")
+    make_dir(LOGS_DIR)
     make_dir(log_dir)
     make_dir(log_dir / "metrics/")
     make_dir(log_dir / "checkpoints/")
@@ -488,14 +483,10 @@ def main():
         model.eval()
         print("Evaluating model on training and validation set")
         with torch.no_grad():
-            idx = np.random.choice(X_train.shape[0], 100000, replace=False)
-
-            X_train_sampled = X_train[idx]
-            y_train_sampled = y_train[idx]
 
             train_metrics = evaluate_transformer(
-                X_train_sampled,
-                y_train_sampled,
+                X_train,
+                y_train,
                 batch_size,
                 device,
                 model,
@@ -528,13 +519,15 @@ def main():
 
         checkpoint_dir = log_dir / "checkpoints"
         checkpoint_basename = f"checkpoint_epoch_{epoch}"
+        checkpoint_fname = checkpoint_dir / (
+            checkpoint_basename
+            + f"_features_{FLAGS.features}"
+            + f"_features_{FLAGS.data_source}"
+        )
         if current_matthews > best_matthews:
             best_matthews = current_matthews
             checkpoint_fname = checkpoint_dir / (
-                checkpoint_basename
-                + "_features_{FLAGS.features}"
-                + "_features_{FLAGS.data_source}"
-                + "_best_matthews"
+                checkpoint_basename + "_best_matthews"
             )
             print("Saving best MCC model")
 
@@ -560,9 +553,9 @@ def main():
         else:
             no_progress += 1
 
-        save_model(model, str(checkpoint_fname + ".pth"))
+        save_model(model, str(checkpoint_fname.with_suffix(".pth")))
         print("Saving epoch metrics")
-        with open(f"{log_dir}/metrics/epoch_{epoch}.json", "w") as outfile:
+        with open(log_dir / f"metrics/epoch_{epoch}.json", "w") as outfile:
             json.dump(epoch_metrics, outfile)
 
         if no_progress == patience:

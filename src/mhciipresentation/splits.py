@@ -236,6 +236,7 @@ def random_splitting_mouse(data: pd.DataFrame) -> None:
 def main():
     print("Splitting SA EL + BA data randomly")
     sa_data = load_sa_data()
+    make_dir(SPLITS_DIR)
     random_splitting(
         sa_data,
         out_dir=SPLITS_DIR / "random_iedb/",
