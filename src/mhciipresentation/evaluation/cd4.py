@@ -57,7 +57,7 @@ set_pandas_options()
 
 def main():
     print("CD4")
-    epitope_df = epitope_file_parser(EPITOPES_DIR + "CD4_epitopes.fsa")
+    epitope_df = epitope_file_parser(RAW_DATA / "CD4_epitopes.fsa")
     epitope_df["label"] = 1
     epitope_df = attach_pseudosequence(epitope_df)
     epitope_df["peptides_and_pseudosequence"] = epitope_df["peptide"].astype(
@@ -94,7 +94,10 @@ def main():
         ]
     )
 
-    X = encode_aa_sequences(data.peptides_and_pseudosequence, AA_TO_INT,)
+    X = encode_aa_sequences(
+        data.peptides_and_pseudosequence,
+        AA_TO_INT,
+    )
     y = data.label.values
     batch_size = 5000
 
