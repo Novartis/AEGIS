@@ -449,7 +449,9 @@ def main():
     print("Building directories to save checkpoints and logging metrics")
     now = datetime.now()
     training_start_time = now.strftime("%m-%d-%Y-%H-%M-%S")
-    log_dir = Path(f"./logs/{training_start_time}")
+    log_dir = Path(
+        f"./logs/{training_start_time}_features_{FLAGS.features}_source_{FLAGS.data_source}"
+    )
     make_dir(LOGS_DIR)
     make_dir(log_dir)
     make_dir(log_dir / "metrics/")
@@ -519,11 +521,7 @@ def main():
 
         checkpoint_dir = log_dir / "checkpoints"
         checkpoint_basename = f"checkpoint_epoch_{epoch}"
-        checkpoint_fname = checkpoint_dir / (
-            checkpoint_basename
-            + f"_features_{FLAGS.features}"
-            + f"_features_{FLAGS.data_source}"
-        )
+        checkpoint_fname = checkpoint_dir / checkpoint_basename
         if current_matthews > best_matthews:
             best_matthews = current_matthews
             checkpoint_fname = checkpoint_dir / (
