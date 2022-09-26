@@ -21,11 +21,7 @@ from sklearn.model_selection import train_test_split
 
 from mhciipresentation.constants import N_MOTIF_FOLDS
 from mhciipresentation.human.human import load_raw_files, select_data_files
-from mhciipresentation.loaders import (
-    load_public_mouse_data,
-    load_sa_data,
-    load_sa_el_data,
-)
+from mhciipresentation.loaders import load_nod_data, load_sa_data
 from mhciipresentation.paths import LEVENSTEIN_DIR, RAW_DATA, SPLITS_DIR
 from mhciipresentation.utils import make_dir
 
@@ -239,7 +235,7 @@ def main():
     )
 
     print("Random splitting of mouse data")
-    mouse_data = load_public_mouse_data()
+    mouse_data = load_nod_data()
     random_splitting_mouse(mouse_data)
 
 
