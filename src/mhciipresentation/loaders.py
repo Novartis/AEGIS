@@ -234,9 +234,7 @@ def load_K562_dataset() -> Tuple[pd.DataFrame, pd.DataFrame]:
     Returns:
         Tuple[pd.DataFrame, pd.DataFrame]: [description]
     """
-    supp_tables = pd.ExcelFile(
-        DATA_DIR / "maria_data/supplementary_tables.xlsx"
-    )
+    supp_tables = pd.ExcelFile(RAW_DATA / "supplementary_tables.xlsx")
     DRB1_0101_ligands = supp_tables.parse("TableS5", header=1)
     DRB1_0404_ligands = supp_tables.parse("TableS6", header=1)
     return DRB1_0101_ligands, DRB1_0404_ligands
@@ -265,7 +263,7 @@ def load_uniprot() -> pd.DataFrame:
     uniprot = pd.DataFrame(columns=uniprot_columns)
     if not Path(CACHE_DIR / "uniprot_df_shard_1.csv").is_file():
         # Caching results
-        with open(DATA_DIR / "uniprot/uniprot_sprot.fasta") as handle:
+        with open(RAW_DATA / "uniprot_sprot.fasta") as handle:
             seq_counter = 0
             file_counter = 0
             for values in tqdm(SimpleFastaParser(handle)):
@@ -355,9 +353,7 @@ def load_melanoma_dataset() -> pd.DataFrame:
     Returns:
         pd.DataFrame: melanoma dataset with cleaned columns.
     """
-    melanoma_excel_file = pd.ExcelFile(
-        DATA_DIR / "maria_data/melanoma_untyped.xlsx"
-    )
+    melanoma_excel_file = pd.ExcelFile(RAW_DATA / "melanoma_untyped.xlsx")
     melanoma_table = melanoma_excel_file.parse(
         "Supplementary data 2", header=1
     )

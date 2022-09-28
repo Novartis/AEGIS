@@ -21,6 +21,7 @@ import numpy as np
 import pandas as pd
 import torch
 from Bio.SeqIO.FastaIO import SimpleFastaParser
+from pyprojroot import here
 from torch import nn
 from torch.optim import Adam
 from torch.optim.lr_scheduler import ExponentialLR
@@ -389,17 +390,15 @@ def main():
 
     X_train, y_train = shuffle_features_and_labels(X_train, y_train)
 
-    if USE_SUBSET:
-        X_train = X_train[:5000]
-        y_train = y_train[:5000]
-
     batch_size = 4098
-    epochs = 300
+    epochs = 3
     criterion = nn.BCELoss()
 
     lr = float(1e-5)
     patience = 10
-    input_dim = longest_input + 2  # size of longest sequence (25 + start/stop)
+    input_dim = (
+        33 + 2 if FLAGS.features == "seq_only" else 33 + 2 + 67
+    )  # size of longest sequence (33, from NOD mice + start/stop)
     n_tokens = len(list(AA_TO_INT.values()))
     embedding_size = 128  # embedding dimension
     enc_ff_hidden = 64  # dimension of the feedforward nn model in the encoder
@@ -429,41 +428,42 @@ def main():
     scheduler = ExponentialLR(optimizer, gamma=0.9)
 
     training_params = {
-        "debugging round": "no",
-        "data": "sa data random split peptide with mhcii pseudosequence. input sequence dictated by longest sequence in test set.",
-        "splitting": "random splitting with no test and val size of 0.01",
-        "start_lr": lr,
-        "scheduler": "exponential, updates every 10 epoch.",
-        "patience": patience,
-        "input_dim": input_dim,
-        "n_tokens": n_tokens,
-        "embedding_size": embedding_size,
-        "n_attn_heads": n_attn_heads,
-        "enc_ff_hidden": enc_ff_hidden,
-        "ff_hidden": ff_hidden,
-        "nlayers": nlayers,
-        "dropout": dropout,
-        "optimizer": "Adam",
+        "start_lr": str(lr),
+        "patience": str(patience),
+        "input_dim": str(input_dim),
+        "n_tokens": str(n_tokens),
+        "embedding_size": str(embedding_size),
+        "n_attn_heads": str(n_attn_heads),
+        "enc_ff_hidden": str(enc_ff_hidden),
+        "ff_hidden": str(ff_hidden),
+        "nlayers": str(nlayers),
+        "dropout": str(dropout),
     }
 
     print("Building directories to save checkpoints and logging metrics")
-    now = datetime.now()
-    training_start_time = now.strftime("%m-%d-%Y-%H-%M-%S")
     log_dir = Path(
-        f"./logs/{training_start_time}_features_{FLAGS.features}_source_{FLAGS.data_source}"
+        f"./logs/features_{FLAGS.features}_source_{FLAGS.data_source}"
     )
+
     make_dir(LOGS_DIR)
     make_dir(log_dir)
     make_dir(log_dir / "metrics/")
     make_dir(log_dir / "checkpoints/")
 
-    # save_training_params(training_params, log_dir)
+    with open(here() / log_dir / "training_params.json", "w") as p:
+        json.dump(training_params, p)
+
+    if USE_SUBSET:
+        X_train = X_train[:10000]
+        y_train = y_train[:10000]
 
     best_loss = 10000
-    best_matthews = 0
-    best_recall = 0
-    best_precision = 0
+    best_matthews = -1
+    best_recall = -1
+    best_precision = -1
     no_progress = 0
+    print(f"Features: {FLAGS.features}")
+    print(f"Data Sources: {FLAGS.data_source}")
     print("Starting training")
     for epoch in range(1, epochs + 1):
         epoch_start_time = time.time()
@@ -497,17 +497,30 @@ def main():
                 AA_TO_INT["X"],
                 criterion,
             )
-            val_metrics = evaluate_transformer(
-                X_val,
-                y_val,
-                batch_size,
-                device,
-                model,
-                "val",
-                input_dim,
-                AA_TO_INT["X"],
-                criterion,
-            )
+            if USE_SUBSET:
+                val_metrics = evaluate_transformer(
+                    X_val[:5000],
+                    y_val[:5000],
+                    batch_size,
+                    device,
+                    model,
+                    "val",
+                    input_dim,
+                    AA_TO_INT["X"],
+                    criterion,
+                )
+            else:
+                val_metrics = evaluate_transformer(
+                    X_val,
+                    y_val,
+                    batch_size,
+                    device,
+                    model,
+                    "val",
+                    input_dim,
+                    AA_TO_INT["X"],
+                    criterion,
+                )
             epoch_metrics = {"train": train_metrics, "val": val_metrics}
 
         if epoch % 10 == 0:
@@ -562,10 +575,6 @@ def main():
             # Early stopping
             break
 
-    # except Exception as error:
-    #     raise error
-    # finally:
-    # torch.cuda.empty_cache()
     print("Training terminated.")
 
 
@@ -578,7 +587,7 @@ if __name__ == "__main__":
         required=False,
         help="Type of data to use",
         choices=["iedb", "nod", "iedb_nod"],
-        default="iedb_nod",
+        default="nod",
     )
     parser.add_argument(
         "--features",

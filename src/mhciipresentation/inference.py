@@ -9,6 +9,7 @@ Utilities useful for inference.
 
 import json
 import os
+from pathlib import Path
 
 import torch
 from torch import nn
@@ -74,18 +75,18 @@ def setup_model(device: torch.device, model_path: str):
         [type]: [description]
     """
     with open(
-        "/".join(model_path.split("/")[:-2]) + "/" + "training_params.json",
+        Path(model_path).parent.parent / "training_params.json",
         "r",
     ) as infile:
         data = json.loads(infile.read())
-        input_dim = data["input_dim"]
-        n_tokens = data["n_tokens"]
-        embedding_size = data["embedding_size"]
-        n_attn_heads = data["n_attn_heads"]
-        enc_ff_hidden = data["enc_ff_hidden"]
-        ff_hidden = data["ff_hidden"]
-        nlayers = data["nlayers"]
-        dropout = data["dropout"]
+        input_dim = int(data["input_dim"])
+        n_tokens = int(data["n_tokens"])
+        embedding_size = int(data["embedding_size"])
+        n_attn_heads = int(data["n_attn_heads"])
+        enc_ff_hidden = int(data["enc_ff_hidden"])
+        ff_hidden = int(data["ff_hidden"])
+        nlayers = int(data["nlayers"])
+        dropout = float(data["dropout"])
 
     model = TransformerModel(
         input_dim,

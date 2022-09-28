@@ -178,7 +178,7 @@ def random_splitting(
     print("Written random splits successfully")
 
 
-def random_splitting_mouse(data: pd.DataFrame) -> None:
+def random_splitting_nod(data: pd.DataFrame) -> None:
     """We stratify by protein name.
 
     Args:
@@ -246,7 +246,7 @@ def main():
 
     print("Random splitting of mouse data")
     mouse_data = load_nod_data()
-    random_splitting_mouse(mouse_data)
+    random_splitting_nod(mouse_data)
 
 
 if __name__ == "__main__":
