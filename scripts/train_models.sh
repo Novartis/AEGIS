@@ -9,8 +9,3 @@ python src/mhciipresentation/transformer.py --data_source iedb --features seq_mh
 python src/mhciipresentation/transformer.py --data_source nod --features seq_mhc
 
 python src/mhciipresentation/transformer.py --data_source iedb_nod --features seq_mhc
-
-
-
-
-
