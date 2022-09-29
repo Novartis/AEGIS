@@ -95,7 +95,6 @@ def main():
     )
 
     if FLAGS.model_with_pseudo_path is not None:
-
         X = encode_aa_sequences(
             data.peptides_and_pseudosequence,
             AA_TO_INT,
@@ -105,6 +104,7 @@ def main():
             data.Sequence,
             AA_TO_INT,
         )
+
     y = data.label.values
     batch_size = 5000
 
