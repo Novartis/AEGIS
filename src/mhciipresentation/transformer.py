@@ -441,16 +441,20 @@ def main():
     }
 
     print("Building directories to save checkpoints and logging metrics")
-    log_dir = Path(
-        f"./logs/features_{FLAGS.features}_source_{FLAGS.data_source}"
+    print ("LOGS_DIR: %s" % LOGS_DIR)
+
+    log_dir = LOGS_DIR / Path(
+        f"features_{FLAGS.features}_source_{FLAGS.data_source}"
     )
+
+    print ("logdir is: %s" % log_dir)
 
     make_dir(LOGS_DIR)
     make_dir(log_dir)
     make_dir(log_dir / "metrics/")
     make_dir(log_dir / "checkpoints/")
 
-    with open(here() / log_dir / "training_params.json", "w") as p:
+    with open(log_dir / "training_params.json", "w") as p:
         json.dump(training_params, p)
 
     if USE_SUBSET:

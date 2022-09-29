@@ -1,7 +1,7 @@
 _this_script=`readlink -f $0`
 _this_dir=`dirname $_this_script`
 
-python_env="/usr/prog/sb/mw/python/conda/sb_aegis/bin/python"
+python_env="/usr/prog/sb/mw/python/conda/sb-aegis/bin/python"
 qsub_flags="-pe smp 1 -l gpu_card=1 -l gpu_arch=tesla_v100* -l h_rt=120000 -l m_mem_free=64G -cwd -j y -b y "
 
 
