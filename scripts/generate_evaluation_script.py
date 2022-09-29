@@ -61,9 +61,9 @@ def main():
         for script in ["cd4.py", "maria.py", "nod.py"]:
             for model in best_models.values():
                 if model["features"] == "seq_only":
-                    evaluation_script_params = f"python ./src/mhciipresentation/evaluation/{script} --model_wo_pseudo_path {model['model']} --resuts {LOGS_DIR}/evaluation/{model['features']}_{model['data']}"
+                    evaluation_script_params = f"python ./src/mhciipresentation/evaluation/{script} --model_wo_pseudo_path {model['model']} --results {LOGS_DIR}/evaluation/{model['features']}_{model['data']}"
                 else:
-                    evaluation_script_params = f"python ./src/mhciipresentation/evaluation/{script} --model_with_pseudo_path {model['model']} --resuts {LOGS_DIR}/evaluation/{model['features']}_{model['data']}"
+                    evaluation_script_params = f"python ./src/mhciipresentation/evaluation/{script} --model_with_pseudo_path {model['model']} --results {LOGS_DIR}/evaluation/{model['features']}_{model['data']}"
 
                 f.write(evaluation_script_params)
                 # Add new line
