@@ -391,7 +391,7 @@ def main():
     X_train, y_train = shuffle_features_and_labels(X_train, y_train)
 
     batch_size = 4098
-    epochs = 3
+    epochs = 500
     criterion = nn.BCELoss()
 
     lr = float(1e-5)
