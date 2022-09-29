@@ -767,7 +767,7 @@ def attach_pseudosequence(epitope_df: pd.DataFrame) -> pd.Series:
         how="outer",
         left_on="MHC_molecule",
         right_on="Name",
-    ).dropna()["Pseudosequence"]
+    ).dropna()
 
 
 def assign_pseudosequences(
