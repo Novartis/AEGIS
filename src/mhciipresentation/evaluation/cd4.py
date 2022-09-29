@@ -46,6 +46,7 @@ from mhciipresentation.utils import (
     compute_performance_measures,
     encode_aa_sequences,
     flatten_lists,
+    make_dir,
     make_predictions_with_transformer,
     render_roc_curve,
     sample_from_human_uniprot,
@@ -119,6 +120,7 @@ def main():
     )
     performance = compute_performance_measures(predictions, y)
     print(performance)
+    make_dir(FLAGS.results)
     render_roc_curve(
         predictions,
         y,

@@ -111,6 +111,7 @@ def handle_K562_dataset(ligands: pd.DataFrame, title: str, fname: str) -> None:
     )
     performance = compute_performance_measures(predictions, y)
     print(performance)
+    make_dir(FLAGS.results)
     render_roc_curve(predictions, y, FLAGS.results, title, fname)
 
 

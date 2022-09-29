@@ -17,6 +17,7 @@ from mhciipresentation.loaders import load_nod_data, load_nod_idx
 from mhciipresentation.utils import (
     compute_performance_measures,
     encode_aa_sequences,
+    make_dir,
     make_predictions_with_transformer,
     render_roc_curve,
     set_pandas_options,
@@ -58,6 +59,7 @@ def handle_public_NOD(
     )
     performance = compute_performance_measures(predictions, y)
     print(performance)
+    make_dir(FLAGS.results)
     render_roc_curve(
         predictions,
         y,
