@@ -697,7 +697,7 @@ def render_roc_curve(y_pred, y_true, dest_dir, title, fname):
     plt.ylabel("True Positive Rate")
     plt.title(title)
     plt.legend(loc="lower right")
-    plt.savefig(dest_dir + fname + ".png")
+    plt.savefig(os.path.join(dest_dir,fname+".png"))
 
 
 def sample_peptides(hs_uniprot_str: str, peptide_length: int, n: int) -> List:

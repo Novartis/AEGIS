@@ -254,6 +254,7 @@ def prepare_iedb_data() -> Tuple[
 
 
 def prepare_nod_data():
+
     nod_data = load_nod_data()
     X_train_idx_nod, X_val_idx_nod, X_test_idx_nod = load_nod_idx()
     X_train_nod = nod_data.iloc[X_train_idx_nod["index"]].rename(
@@ -266,7 +267,8 @@ def prepare_nod_data():
         columns={"Peptide Sequence": "peptide"}
     )
 
-    if FLAGS.features == "seq_mhc":
+#    if FLAGS.features == "seq_mhc":
+    if True:
         pseudosequences = load_pseudosequences()
         iag7_pseudosequence = pseudosequences.loc[
             pseudosequences.Name == "H-2-IAg7"
@@ -395,7 +397,7 @@ def main():
     criterion = nn.BCELoss()
 
     lr = float(1e-5)
-    patience = 10
+    patience = 20
     input_dim = (
         33 + 2 if FLAGS.features == "seq_only" else 33 + 2 + 67
     )  # size of longest sequence (33, from NOD mice + start/stop)

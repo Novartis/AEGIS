@@ -138,7 +138,11 @@ def handle_melanoma_dataset(
         ]
     )
     device = torch.device("cuda" if USE_GPU else "cpu")  # training device
-    model, input_dim = setup_model(device, FLAGS.model_wo_pseudo_path)
+    if FLAGS.model_wo_pseudo_path is not None:
+        model, input_dim = setup_model(device, FLAGS.model_wo_pseudo_path)
+    else:
+        model, input_dim = setup_model(device, FLAGS.model_with_pseudo_path)
+
     X = encode_aa_sequences(
         dataset.Sequence,
         AA_TO_INT,
@@ -168,17 +172,19 @@ def main():
     DRB1_0101, DRB1_0404 = load_DRB1_0101_DRB1_0404()
     DRB1_0101_ligands["Pseudosequence"] = DRB1_0101
     DRB1_0404_ligands["Pseudosequence"] = DRB1_0404
+    print("DRB1_0101")
     handle_K562_dataset(
         DRB1_0101_ligands,
         "Differentiating K562 DRB1*01:01 ligands from decoys",
         "DRB1_0101_ligands",
     )
+    print("DRB1_0404")
     handle_K562_dataset(
         DRB1_0404_ligands,
         "Differentiating K562 DRB1*04:04 ligands from decoys",
         "DRB1_0404_ligands",
     )
-
+    print("DRB1_0404")
     melanoma_dataset = load_melanoma_dataset()
     print("Handle melanoma datasets")
     print(melanoma_dataset.shape)
