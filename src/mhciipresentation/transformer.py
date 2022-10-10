@@ -392,14 +392,14 @@ def main():
 
     X_train, y_train = shuffle_features_and_labels(X_train, y_train)
 
-    batch_size = 4098
-    epochs = 500
+    batch_size = 6144 * torch.cuda.device_count()  
+    epochs = 300
     criterion = nn.BCELoss()
 
     lr = float(1e-5)
-    patience = 20
+    patience = 100
     input_dim = (
-        33 + 2 if FLAGS.features == "seq_only" else 33 + 2 + 67
+        33 + 2 if FLAGS.features == "seq_only" else 33 + 2 + 34
     )  # size of longest sequence (33, from NOD mice + start/stop)
     n_tokens = len(list(AA_TO_INT.values()))
     embedding_size = 128  # embedding dimension
@@ -409,7 +409,7 @@ def main():
     n_attn_heads = 2  # number of heads in nn.MultiheadAttention
     dropout = 0.3  # dropout probability
     device = torch.device("cuda" if USE_GPU else "cpu")  # training device
-
+    
     print("Instantiating model")
     model = TransformerModel(
         input_dim,
@@ -423,7 +423,8 @@ def main():
         device,
     )
     get_n_trainable_params(model)
-    model = nn.DataParallel(model, device_ids=[0])  # type: ignore
+    
+    model = nn.DataParallel(model, device_ids=list(range(torch.cuda.device_count())))  # type: ignore
     # try:
     model = model.to(device) if USE_GPU else model
     optimizer = Adam(model.parameters(), lr=lr)

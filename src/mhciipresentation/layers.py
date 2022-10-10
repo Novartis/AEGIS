@@ -16,7 +16,7 @@ from torch import nn
 
 class PositionalEncoding(nn.Module):
     def __init__(
-        self, embedding_size: int, dropout: float = 0.0, max_len: int = 5000
+        self, embedding_size: int, dropout: float = 0.0, max_len: int = 6144
     ):
         r"""Initializes the PositionalEncoding layer of the encoder network
 
