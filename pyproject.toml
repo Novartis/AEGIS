@@ -57,6 +57,7 @@ matplotlib = "^3.6.0"
 scikit-learn = "^1.1.2"
 pyprojroot = "^0.2.0"
 openpyxl = "^3.0.10"
+ipython = "^8.5.0"
 
 [tool.poetry.dev-dependencies]
 
