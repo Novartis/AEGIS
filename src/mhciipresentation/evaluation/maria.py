@@ -100,10 +100,18 @@ def handle_K562_dataset(ligands: pd.DataFrame, title: str, fname: str) -> None:
     else:
         model, input_dim = setup_model(device, FLAGS.model_with_pseudo_path)
 
-    X = encode_aa_sequences(
-        dataset.Sequence,
-        AA_TO_INT,
-    )
+    if FLAGS.model_wo_pseudo_path:
+        X = encode_aa_sequences(
+            dataset.Sequence,
+            AA_TO_INT,
+        )
+    else:
+        X = encode_aa_sequences(
+            dataset.Sequence.as_type(str)
+            + dataset.Pseudosequence.as_type(str),
+            AA_TO_INT,
+        )
+
     y = dataset.label.values
     batch_size = 5000
     predictions = make_predictions_with_transformer(
@@ -138,15 +146,24 @@ def handle_melanoma_dataset(
         ]
     )
     device = torch.device("cuda" if USE_GPU else "cpu")  # training device
+
     if FLAGS.model_wo_pseudo_path is not None:
         model, input_dim = setup_model(device, FLAGS.model_wo_pseudo_path)
     else:
         model, input_dim = setup_model(device, FLAGS.model_with_pseudo_path)
+  
+    if FLAGS.model_wo_pseudo_path:
+        X = encode_aa_sequences(
+            dataset.Sequence,
+            AA_TO_INT,
+        )
+    else:
+        X = encode_aa_sequences(
+            dataset.Sequence.as_type(str)
+            + dataset.Pseudosequence.as_type(str),
+            AA_TO_INT,
+        )
 
-    X = encode_aa_sequences(
-        dataset.Sequence,
-        AA_TO_INT,
-    )
     y = dataset.label.values
     batch_size = 5000
     predictions = make_predictions_with_transformer(

@@ -12,9 +12,9 @@ import torch
 from torch import nn
 
 from mhciipresentation.constants import AA_TO_INT, USE_GPU
-from mhciipresentation.transformer import prepare_nod_data
 from mhciipresentation.inference import setup_model
 from mhciipresentation.loaders import load_nod_data, load_nod_idx
+from mhciipresentation.transformer import prepare_nod_data
 from mhciipresentation.utils import (
     compute_performance_measures,
     encode_aa_sequences,
@@ -41,7 +41,7 @@ def handle_public_NOD(
     # nod_data = load_nod_data()
     # _, _, X_test_idx = load_nod_idx()
     # test_data = nod_data.iloc[X_test_idx["index"]]
-    _,_,test_data,_,_,y_test = prepare_nod_data()
+    _, _, test_data, _, _, y_test = prepare_nod_data()
 
     if FLAGS.model_with_pseudo_path is not None:
         X = encode_aa_sequences(
@@ -54,7 +54,7 @@ def handle_public_NOD(
             AA_TO_INT,
         )
 
-    #y = test_data.label.values
+    # y = test_data.label.values
 
     predictions = make_predictions_with_transformer(
         X, batch_size, device, model, input_dim, AA_TO_INT["X"]
@@ -73,10 +73,11 @@ def handle_public_NOD(
 
 def main():
     device = torch.device("cuda" if USE_GPU else "cpu")  # training device
-    if FLAGS.model_wo_pseudo_path is not None:
-        model, input_dim = setup_model(device, FLAGS.model_wo_pseudo_path)
-    else:
+
+    if FLAGS.model_with_pseudo_path is not None:
         model, input_dim = setup_model(device, FLAGS.model_with_pseudo_path)
+    else:
+        model, input_dim = setup_model(device, FLAGS.model_wo_pseudo_path)
 
     batch_size = 5000
     handle_public_NOD(model, input_dim, device, batch_size)
