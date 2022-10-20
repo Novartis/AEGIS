@@ -64,7 +64,8 @@ def find_best_model(performance_metric, features, data):
 
 def find_best_models():
     best_models = dict()
-    for data in ["iedb", "nod", "iedb_nod"]:
+    #for data in ["iedb", "nod", "iedb_nod"]:
+    for data in ["iedb", "nod"]:
         for features in ["seq_only", "seq_mhc"]:
             best_models[hash(data + features)] = {
                 "data": data,

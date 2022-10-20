@@ -42,6 +42,11 @@ def setup_model_local(device: torch.device, model_path: str):
         nlayers = data["nlayers"]
         dropout = data["dropout"]
 
+        if "max_len" in data.keys():
+            max_len = int(data["max_len"])
+        else:
+            max_len = 5000
+
     model = TransformerModel(
         input_dim,
         n_tokens,
@@ -52,6 +57,7 @@ def setup_model_local(device: torch.device, model_path: str):
         nlayers,
         dropout,
         device,
+        max_len,
     )
     if USE_GPU:
         model = nn.DataParallel(model, device_ids=[0])  # type: ignore
@@ -88,6 +94,11 @@ def setup_model(device: torch.device, model_path: str):
         nlayers = int(data["nlayers"])
         dropout = float(data["dropout"])
 
+        if "max_len" in data:
+            max_len = int(data["max_len"])
+        else:
+            max_len = 5000
+
     model = TransformerModel(
         input_dim,
         n_tokens,
@@ -98,13 +109,14 @@ def setup_model(device: torch.device, model_path: str):
         nlayers,
         dropout,
         device,
+        max_len,
     )
     if USE_GPU:
         model = nn.DataParallel(model, device_ids=[0])  # type: ignore
     else:
         model = nn.DataParallel(  # type: ignore
-            model, device_ids=[i for i in range(30)]
+           model, device_ids=[i for i in range(30)]
         )
     model = load_model_weights(model, model_path, device)
     model.eval()
-    return model, input_dim
+    return model, input_dim, max_len

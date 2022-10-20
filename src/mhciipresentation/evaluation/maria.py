@@ -96,9 +96,9 @@ def handle_K562_dataset(ligands: pd.DataFrame, title: str, fname: str) -> None:
     device = torch.device("cuda" if USE_GPU else "cpu")  # training device
 
     if FLAGS.model_wo_pseudo_path is not None:
-        model, input_dim = setup_model(device, FLAGS.model_wo_pseudo_path)
+        model, input_dim, max_len = setup_model(device, FLAGS.model_wo_pseudo_path)
     else:
-        model, input_dim = setup_model(device, FLAGS.model_with_pseudo_path)
+        model, input_dim, max_len = setup_model(device, FLAGS.model_with_pseudo_path)
 
     if FLAGS.model_wo_pseudo_path:
         X = encode_aa_sequences(
@@ -107,13 +107,13 @@ def handle_K562_dataset(ligands: pd.DataFrame, title: str, fname: str) -> None:
         )
     else:
         X = encode_aa_sequences(
-            dataset.Sequence.as_type(str)
-            + dataset.Pseudosequence.as_type(str),
+            dataset.Sequence.astype("string")
+            + dataset.Pseudosequence.astype("string"),
             AA_TO_INT,
         )
 
     y = dataset.label.values
-    batch_size = 5000
+    batch_size = max_len
     predictions = make_predictions_with_transformer(
         X, batch_size, device, model, input_dim, AA_TO_INT["X"]
     )
@@ -148,9 +148,9 @@ def handle_melanoma_dataset(
     device = torch.device("cuda" if USE_GPU else "cpu")  # training device
 
     if FLAGS.model_wo_pseudo_path is not None:
-        model, input_dim = setup_model(device, FLAGS.model_wo_pseudo_path)
+        model, input_dim, max_len = setup_model(device, FLAGS.model_wo_pseudo_path)
     else:
-        model, input_dim = setup_model(device, FLAGS.model_with_pseudo_path)
+        model, input_dim, max_len = setup_model(device, FLAGS.model_with_pseudo_path)
   
     if FLAGS.model_wo_pseudo_path:
         X = encode_aa_sequences(
@@ -159,13 +159,12 @@ def handle_melanoma_dataset(
         )
     else:
         X = encode_aa_sequences(
-            dataset.Sequence.as_type(str)
-            + dataset.Pseudosequence.as_type(str),
+            dataset.Sequence,
             AA_TO_INT,
         )
 
     y = dataset.label.values
-    batch_size = 5000
+    batch_size = max_len
     predictions = make_predictions_with_transformer(
         X, batch_size, device, model, input_dim, AA_TO_INT["X"]
     )
