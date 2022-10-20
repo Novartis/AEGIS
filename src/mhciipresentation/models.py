@@ -90,6 +90,7 @@ class TransformerModel(nn.Module):
         n_layers: int,
         dropout: float,
         device: torch.device,
+        max_len: int = 5000,
     ):
         r"""Initializes TransformerModel, including PositionalEncoding and
             TransformerEncoderLayer
@@ -109,7 +110,7 @@ class TransformerModel(nn.Module):
         super().__init__()
         self.model_type = "Transformer"
         self.seq_len = seq_len
-        self.pos_encoder = PositionalEncoding(embedding_size, dropout)
+        self.pos_encoder = PositionalEncoding(embedding_size, dropout, max_len)
         encoder_layers = TransformerEncoderLayer(
             embedding_size,
             n_attn_heads,

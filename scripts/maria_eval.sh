@@ -1,0 +1,1 @@
+python src/mhciipresentation/evaluation/maria.py --model_wo_pseudo_path ./logs/09-26-2022-16-48-39_features_seq_only_source_iedb/checkpoints/checkpoint_epoch_1_best_precision.pth --results data/evaluation/

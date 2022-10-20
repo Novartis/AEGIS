@@ -12,6 +12,7 @@ import copy
 import json
 import pprint
 import random
+from pathlib import Path
 from typing import Dict, List, Tuple
 
 import numpy as np
@@ -45,6 +46,7 @@ from mhciipresentation.utils import (
     compute_performance_measures,
     encode_aa_sequences,
     flatten_lists,
+    make_dir,
     make_predictions_with_transformer,
     render_roc_curve,
     sample_from_human_uniprot,
@@ -92,16 +94,32 @@ def handle_K562_dataset(ligands: pd.DataFrame, title: str, fname: str) -> None:
     # ) + dataset["Pseudosequence"].astype(str)
 
     device = torch.device("cuda" if USE_GPU else "cpu")  # training device
-    model, input_dim = setup_model(device, FLAGS.model_wo_pseudo_path)
 
-    X = encode_aa_sequences(dataset.Sequence, AA_TO_INT,)
+    if FLAGS.model_wo_pseudo_path is not None:
+        model, input_dim, max_len = setup_model(device, FLAGS.model_wo_pseudo_path)
+    else:
+        model, input_dim, max_len = setup_model(device, FLAGS.model_with_pseudo_path)
+
+    if FLAGS.model_wo_pseudo_path:
+        X = encode_aa_sequences(
+            dataset.Sequence,
+            AA_TO_INT,
+        )
+    else:
+        X = encode_aa_sequences(
+            dataset.Sequence.astype("string")
+            + dataset.Pseudosequence.astype("string"),
+            AA_TO_INT,
+        )
+
     y = dataset.label.values
-    batch_size = 5000
+    batch_size = max_len
     predictions = make_predictions_with_transformer(
-        X, y, batch_size, device, model, input_dim, AA_TO_INT["X"]
+        X, batch_size, device, model, input_dim, AA_TO_INT["X"]
     )
     performance = compute_performance_measures(predictions, y)
     print(performance)
+    make_dir(FLAGS.results)
     render_roc_curve(predictions, y, FLAGS.results, title, fname)
 
 
@@ -122,15 +140,33 @@ def handle_melanoma_dataset(
     decoys = pd.DataFrame(flatten_lists(decoys), columns=["Sequence"])
     decoys["label"] = 0
     dataset = pd.concat(
-        [ligands[["Sequence", "label"]], decoys[["Sequence", "label"]],]
+        [
+            ligands[["Sequence", "label"]],
+            decoys[["Sequence", "label"]],
+        ]
     )
     device = torch.device("cuda" if USE_GPU else "cpu")  # training device
-    model, input_dim = setup_model(device, FLAGS.model_wo_pseudo_path)
-    X = encode_aa_sequences(dataset.Sequence, AA_TO_INT,)
+
+    if FLAGS.model_wo_pseudo_path is not None:
+        model, input_dim, max_len = setup_model(device, FLAGS.model_wo_pseudo_path)
+    else:
+        model, input_dim, max_len = setup_model(device, FLAGS.model_with_pseudo_path)
+  
+    if FLAGS.model_wo_pseudo_path:
+        X = encode_aa_sequences(
+            dataset.Sequence,
+            AA_TO_INT,
+        )
+    else:
+        X = encode_aa_sequences(
+            dataset.Sequence,
+            AA_TO_INT,
+        )
+
     y = dataset.label.values
-    batch_size = 5000
+    batch_size = max_len
     predictions = make_predictions_with_transformer(
-        X, y, batch_size, device, model, input_dim, AA_TO_INT["X"]
+        X, batch_size, device, model, input_dim, AA_TO_INT["X"]
     )
     performance = compute_performance_measures(predictions, y)
     print(performance)
@@ -138,6 +174,7 @@ def handle_melanoma_dataset(
 
 
 def main():
+    make_dir(Path("./data/evaluation/"))
     print("Handle K562 datasets")
     DRB1_0101_ligands, DRB1_0404_ligands = load_K562_dataset()
     # To exclude shorter peptides in the test set
@@ -151,17 +188,19 @@ def main():
     DRB1_0101, DRB1_0404 = load_DRB1_0101_DRB1_0404()
     DRB1_0101_ligands["Pseudosequence"] = DRB1_0101
     DRB1_0404_ligands["Pseudosequence"] = DRB1_0404
+    print("DRB1_0101")
     handle_K562_dataset(
         DRB1_0101_ligands,
         "Differentiating K562 DRB1*01:01 ligands from decoys",
         "DRB1_0101_ligands",
     )
+    print("DRB1_0404")
     handle_K562_dataset(
         DRB1_0404_ligands,
         "Differentiating K562 DRB1*04:04 ligands from decoys",
         "DRB1_0404_ligands",
     )
-
+    print("DRB1_0404")
     melanoma_dataset = load_melanoma_dataset()
     print("Handle melanoma datasets")
     print(melanoma_dataset.shape)
@@ -172,17 +211,19 @@ def main():
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    # parser.add_argument(
-    #     "--model_with_pseudo_path",
-    #     "-modp",
-    #     type=str,
-    #     help="Path to the checkpoint of the model to evaluate.",
-    # )
+    parser.add_argument(
+        "--model_with_pseudo_path",
+        "-modp",
+        type=str,
+        help="Path to the checkpoint of the model to evaluate.",
+        required=False,
+    )
     parser.add_argument(
         "--model_wo_pseudo_path",
         "-modwop",
         type=str,
         help="Path to the checkpoint of the model to evaluate.",
+        required=False,
     )
     parser.add_argument(
         "--results",

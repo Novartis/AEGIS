@@ -11,6 +11,7 @@ import os
 from typing import List, Tuple
 
 import pandas as pd
+from pyprojroot import here
 
 from mhciipresentation.loaders import load_raw_files
 from mhciipresentation.paths import PROCESSED_DATA, RAW_DATA
@@ -46,13 +47,13 @@ def get_pseudosequences(
     """
     # Load necessary files
     allelelist = pd.read_csv(
-        RAW_DATA + "allelelist.txt",
+        RAW_DATA / "allelelist.txt",
         sep=" ",
         index_col=0,
         names=["Name", "Alleles"],
     )
     mhcii_molecules = pd.read_csv(
-        RAW_DATA + "pseudosequence_mapping.dat",
+        RAW_DATA / "pseudosequence_mapping.dat",
         sep="\t",
         names=["Name", "Pseudosequence"],
         index_col=0,
@@ -112,8 +113,8 @@ def main():
     sa_el_data = filter_el_samples(sa_data)
     # The df needs to be re-indexed from 0 to len(sa_el_data) - 1 otherwise we
     # have troubles down the road.
-    sa_el_data.reset_index(drop=True).to_csv(PROCESSED_DATA + "sa_el_data.csv")
-    sa_data.reset_index(drop=True).to_csv(PROCESSED_DATA + "sa_data.csv")
+    sa_el_data.reset_index(drop=True).to_csv(PROCESSED_DATA / "sa_el_data.csv")
+    sa_data.reset_index(drop=True).to_csv(PROCESSED_DATA / "sa_data.csv")
 
 
 if __name__ == "__main__":

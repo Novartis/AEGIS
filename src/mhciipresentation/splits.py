@@ -12,6 +12,7 @@ https://academic.oup.com/nar/article/48/W1/W449/5837056
 
 import os
 import random
+from pathlib import Path
 from typing import Set
 
 import numpy as np
@@ -20,17 +21,14 @@ from sklearn.model_selection import train_test_split
 
 from mhciipresentation.constants import N_MOTIF_FOLDS
 from mhciipresentation.human.human import load_raw_files, select_data_files
-from mhciipresentation.loaders import (
-    load_public_mouse_data,
-    load_sa_data,
-    load_sa_el_data,
-)
+from mhciipresentation.loaders import load_nod_data, load_sa_data
 from mhciipresentation.paths import LEVENSTEIN_DIR, RAW_DATA, SPLITS_DIR
 from mhciipresentation.utils import make_dir
 
 
 def remove_overlapping_peptides(
-    peptides_1: Set, peptides_2: Set,
+    peptides_1: Set,
+    peptides_2: Set,
 ) -> pd.Series:
     """Removes peptides occuring in peptides_2 from peptides_1
 
@@ -79,26 +77,35 @@ def validate_split(
 
 
 def save_idx(
-    out_dir: str,
+    out_dir: Path,
     X_train_data: pd.DataFrame,
     X_val_data: pd.DataFrame,
     X_test_data: pd.DataFrame = None,
 ) -> None:
     X_train_data.index.to_frame(name="index").to_csv(
-        out_dir + "X_train_idx.csv", index=False
+        out_dir / "X_train_idx.csv", index=False
     )
     X_val_data.index.to_frame(name="index").to_csv(
-        out_dir + "X_val_idx.csv", index=False
+        out_dir / "X_val_idx.csv", index=False
     )
     if X_test_data is not None:
         X_test_data.index.to_frame(name="index").to_csv(
-            out_dir + "X_test_idx.csv", index=False
+            out_dir / "X_test_idx.csv", index=False
         )
 
 
 def label_dist_summary(
     data: pd.DataFrame, target_col: str, dataset_name: str
 ) -> None:
+    """Summarizes the distribution of the two most common labels (ie 0 and 1)
+
+    Note: labels for BA data are not accounted for here, therefore do not use this for counting purposes.
+
+    Args:
+        data (pd.DataFrame): data to summarize
+        target_col (str): target column to summarize
+        dataset_name (str): name of the dataset to summarize
+    """
     value_cts = data[target_col].value_counts()
     print(
         f"Label distribution in {dataset_name}: negative samples = "
@@ -108,7 +115,7 @@ def label_dist_summary(
 
 def random_splitting(
     data: pd.DataFrame,
-    out_dir: str = SPLITS_DIR + "/random/",
+    out_dir: str = SPLITS_DIR / "random/",
     eval_frac: float = 0.2,
     val_frac: float = 0.5,
 ) -> None:
@@ -154,7 +161,8 @@ def random_splitting(
         )
     else:
         validate_split(
-            X_train_data.peptide, X_val_data.peptide,
+            X_train_data.peptide,
+            X_val_data.peptide,
         )
 
     # Summary of samples sizes
@@ -170,7 +178,7 @@ def random_splitting(
     print("Written random splits successfully")
 
 
-def random_splitting_mouse(data: pd.DataFrame) -> None:
+def random_splitting_nod(data: pd.DataFrame) -> None:
     """We stratify by protein name.
 
     Args:
@@ -219,141 +227,26 @@ def random_splitting_mouse(data: pd.DataFrame) -> None:
     label_dist_summary(X_test_data, "label", "testing")
 
     # Writing the data
-    out_dir = SPLITS_DIR + "/mouse/" + "/random/"
+    out_dir = SPLITS_DIR / "random_nod"
     make_dir(out_dir)
     save_idx(out_dir, X_train_data, X_val_data, X_test_data)
-    X_train_data.to_csv(out_dir + "X_train.csv", index=False)
-    X_val_data.to_csv(out_dir + "X_val.csv", index=False)
-    X_test_data.to_csv(out_dir + "X_test.csv", index=False)
-    print("Written random splits successfully")
-
-
-def motif_exclusion(data: pd.DataFrame) -> None:
-    list_of_peptide_files = select_data_files(os.listdir(RAW_DATA))
-    list_of_peptide_files.sort()
-    raw_files = load_raw_files(list_of_peptide_files)
-    data_with_filename = data.merge(
-        raw_files[["peptide", "file_name"]].drop_duplicates(),
-        how="left",
-        on="peptide",
-    )
-
-    motifs_splits_dir = SPLITS_DIR + "/motifs/"
-    make_dir(motifs_splits_dir)
-
-    for i in range(N_MOTIF_FOLDS):
-        X_train = data_with_filename.loc[
-            data_with_filename.file_name == f"train_EL{i+1}.txt"
-        ]
-        X_train = data.loc[data.peptide.isin(X_train.peptide.tolist())]
-
-        X_val = data_with_filename.loc[
-            data_with_filename.file_name == f"test_EL{i+1}.txt"
-        ]
-        X_val = data.loc[data.peptide.isin(X_val.peptide.tolist())]
-        label_dist_summary(X_train, "target_value", "training")
-        label_dist_summary(X_val, "target_value", "validation")
-        validate_split(X_train.peptide, X_val.peptide)
-        out_dir = motifs_splits_dir + f"/split_{i+1}/"
-        make_dir(out_dir)
-        save_idx(out_dir, X_train, X_val)
-        print(f"Done with split {i+1}")
-
-
-def leventstein(data: pd.DataFrame) -> None:
-    """Split data according
-
-    Args:
-        data (pd.DataFrame): [description]
-    """
-    pos_groups = pd.read_csv(LEVENSTEIN_DIR + "pos_pep_lev_groups.csv")
-    pos_groups = pos_groups.sample(frac=1)
-    lev_groups = pos_groups["lev_group"].drop_duplicates()
-
-    lev_group_train = lev_groups.sample(frac=0.8, replace=False)
-    lev_group_eval = lev_groups.drop(lev_group_train.index)
-    lev_group_val = lev_group_eval.sample(frac=0.5, replace=False)
-    lev_group_test = lev_group_eval.drop(lev_group_val.index)
-
-    data = data.merge(pos_groups, on="peptide", how="left")
-    positive_peptides_train = data.loc[
-        data["lev_group"].isin(lev_group_train.tolist())
-    ].drop(columns=["lev_group"])
-    positive_peptides_val = data.loc[
-        data["lev_group"].isin(lev_group_val.tolist())
-    ].drop(columns=["lev_group"])
-    positive_peptides_test = data.loc[
-        data["lev_group"].isin(lev_group_test.tolist())
-    ].drop(columns=["lev_group"])
-
-    # Negative data are not "grouped" as much, so we can randomly split them.
-    negative_data = data.loc[data["target_value"] == 0.0]
-
-    neg_X_train, neg_X_eval, _, _ = train_test_split(
-        negative_data.peptide.values,
-        negative_data.target_value.values,
-        test_size=0.2,
-        random_state=42,
-    )
-
-    # Remove peptides occuring in the test set from training set
-    neg_X_train, neg_X_eval = remove_overlapping_peptides(
-        set(neg_X_train), set(neg_X_eval)
-    )
-    negative_peptides_train = data[data["peptide"].isin(neg_X_train)]
-    X_eval_data = data[data["peptide"].isin(neg_X_eval)]
-
-    # Generate dev and validation set from test set
-    X_val = X_eval_data.sample(frac=0.5, random_state=42)
-    X_test = X_eval_data.drop(X_val.index)
-
-    # Remove peptides occuring in validation set from test set
-    X_test, X_val = remove_overlapping_peptides(
-        set(X_test.peptide), set(X_val.peptide)
-    )
-    negative_peptides_val = data[data["peptide"].isin(X_val)]
-    negative_peptides_test = data[data["peptide"].isin(X_test)]
-
-    # Merge negative data with positive data separated by lev groups
-    train_data = positive_peptides_train.append(negative_peptides_train)
-    val_data = positive_peptides_val.append(negative_peptides_val)
-    test_data = positive_peptides_test.append(negative_peptides_test)
-    validate_split(train_data.peptide, val_data.peptide, test_data.peptide)
-
-    # Summary of samples sizes
-    label_dist_summary(train_data, "target_value", "training")
-    label_dist_summary(val_data, "target_value", "validation")
-    label_dist_summary(test_data, "target_value", "testing")
-
-    # Writing the data
-    out_dir = SPLITS_DIR + "/levenstein/"
-    make_dir(out_dir)
-    save_idx(out_dir, train_data, val_data, test_data)
     print("Written random splits successfully")
 
 
 def main():
-    # print("Splitting public dataset")
-    # sa_el_data = load_sa_el_data()
-    # print("Random splitting of human data")
-    # random_splitting(sa_el_data)
-    # print("Motif exclusion splitting of human data")
-    # motif_exclusion(sa_el_data)
-    # print("Levenstein splitting of human data")
-    # leventstein(sa_el_data)
-
-    # print("Splitting SA EL + BA data randomly")
-    # sa_data = load_sa_data()
-    # random_splitting(
-    #     sa_data,
-    #     out_dir=SPLITS_DIR + "/random_sa/",
-    #     val_frac=1,
-    #     eval_frac=0.01,
-    # )
+    print("Splitting SA EL + BA data randomly")
+    sa_data = load_sa_data()
+    make_dir(SPLITS_DIR)
+    random_splitting(
+        sa_data,
+        out_dir=SPLITS_DIR / "random_iedb/",
+        val_frac=0.5,
+        eval_frac=0.05,
+    )
 
     print("Random splitting of mouse data")
-    mouse_data = load_public_mouse_data()
-    random_splitting_mouse(mouse_data)
+    mouse_data = load_nod_data()
+    random_splitting_nod(mouse_data)
 
 
 if __name__ == "__main__":

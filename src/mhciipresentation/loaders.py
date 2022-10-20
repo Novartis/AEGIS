@@ -23,9 +23,7 @@ from mhciipresentation.paths import (
     CACHE_DIR,
     DATA_DIR,
     ENCODED_DATA,
-    MOUSE_PUBLIC,
     PROCESSED_DATA,
-    PSEUDOSEQUENCES,
     RAW_DATA,
     SPLITS_DIR,
 )
@@ -38,7 +36,7 @@ def load_pseudosequences() -> pd.DataFrame:
         pd.DataFrame: pseudosequences for most known human/mouse alleles.
     """
     mhcii_pseudosequences = pd.read_csv(
-        os.path.join(PSEUDOSEQUENCES + "pseudosequence_mapping.dat"),
+        os.path.join(RAW_DATA / "pseudosequence_mapping.dat"),
         sep="\t",
         names=["Name", "Pseudosequence"],
         index_col=0,
@@ -52,7 +50,7 @@ def load_sa_el_data() -> pd.DataFrame:
     Returns:
         pd.DataFrame: SA EL data
     """
-    return pd.read_csv(PROCESSED_DATA + "sa_el_data.csv", index_col=0)
+    return pd.read_csv(PROCESSED_DATA / "iedb_sa_data.csv", index_col=0)
 
 
 def load_sa_data() -> pd.DataFrame:
@@ -61,20 +59,34 @@ def load_sa_data() -> pd.DataFrame:
     Returns:
         pd.DataFrame: BA + EL data.
     """
-    return pd.read_csv(PROCESSED_DATA + "sa_data.csv", index_col=0)
+    return pd.read_csv(PROCESSED_DATA / "sa_data.csv", index_col=0)
 
 
-def load_sa_el_random_idx() -> Tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
+def load_iedb_idx() -> Tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
     """Loads SA EL radom indexes with peptide exclusion.
 
     Returns:
         Tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]: train, val and test
             indices.
     """
-    in_dir = SPLITS_DIR + "/random/"
-    X_train_idx = pd.read_csv(in_dir + "X_train_idx.csv")
-    X_val_idx = pd.read_csv(in_dir + "X_val_idx.csv")
-    X_test_idx = pd.read_csv(in_dir + "X_test_idx.csv")
+    in_dir = SPLITS_DIR / "random_iedb/"
+    X_train_idx = pd.read_csv(in_dir / "X_train_idx.csv")
+    X_val_idx = pd.read_csv(in_dir / "X_val_idx.csv")
+    X_test_idx = pd.read_csv(in_dir / "X_test_idx.csv")
+    return X_train_idx, X_val_idx, X_test_idx
+
+
+def load_nod_idx() -> Tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
+    """Loads SA EL radom indexes with peptide exclusion.
+
+    Returns:
+        Tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]: train, val and test
+            indices.
+    """
+    in_dir = SPLITS_DIR / "random_nod/"
+    X_train_idx = pd.read_csv(in_dir / "X_train_idx.csv")
+    X_val_idx = pd.read_csv(in_dir / "X_val_idx.csv")
+    X_test_idx = pd.read_csv(in_dir / "X_test_idx.csv")
     return X_train_idx, X_val_idx, X_test_idx
 
 
@@ -85,7 +97,7 @@ def load_sa_random_idx() -> Tuple[pd.DataFrame, pd.DataFrame]:
         Tuple[pd.DataFrame, pd.DataFrame]: indices of train and validation sets
             to index sa_data.
     """
-    in_dir = SPLITS_DIR + "/random_sa/"
+    in_dir = SPLITS_DIR / "/random_sa/"
     X_train_idx = pd.read_csv(in_dir + "X_train_idx.csv")
     X_val_idx = pd.read_csv(in_dir + "X_val_idx.csv")
     return X_train_idx, X_val_idx
@@ -99,10 +111,10 @@ def load_mouse_random_idx() -> Tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
         Tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]: data with randomized
         index
     """
-    in_dir = SPLITS_DIR + "/mouse/random/"
-    X_train_idx = pd.read_csv(in_dir + "X_train_idx.csv")
-    X_val_idx = pd.read_csv(in_dir + "X_val_idx.csv")
-    X_test_idx = pd.read_csv(in_dir + "X_test_idx.csv")
+    in_dir = SPLITS_DIR / "/mouse/random/"
+    X_train_idx = pd.read_csv(in_dir / "X_train_idx.csv")
+    X_val_idx = pd.read_csv(in_dir / "X_val_idx.csv")
+    X_test_idx = pd.read_csv(in_dir / "X_test_idx.csv")
     return X_train_idx, X_val_idx, X_test_idx
 
 
@@ -116,8 +128,8 @@ def load_motif_exclusion_idx(fold: int) -> Tuple[pd.DataFrame, pd.DataFrame]:
         Tuple[pd.DataFrame, pd.DataFrame]: loaded train/val split using index.
     """
     in_dir = SPLITS_DIR + "/motifs/"
-    X_train_idx = pd.read_csv(in_dir + f"split_{fold}/" + "X_train_idx.csv")
-    X_val_idx = pd.read_csv(in_dir + f"split_{fold}/" + "X_val_idx.csv")
+    X_train_idx = pd.read_csv(in_dir / f"split_{fold}/" / "X_train_idx.csv")
+    X_val_idx = pd.read_csv(in_dir / f"split_{fold}/" / "X_val_idx.csv")
     return X_train_idx, X_val_idx
 
 
@@ -129,10 +141,10 @@ def load_sa_el_levenstein_idx() -> Tuple[
     Returns:
         Tuple[ pd.DataFrame, pd.DataFrame, pd.DataFrame ]: Levenstein
     """
-    in_dir = SPLITS_DIR + "/levenstein/"
-    X_train_idx = pd.read_csv(in_dir + "X_train_idx.csv")
-    X_val_idx = pd.read_csv(in_dir + "X_val_idx.csv")
-    X_test_idx = pd.read_csv(in_dir + "X_test_idx.csv")
+    in_dir = SPLITS_DIR / "/levenstein/"
+    X_train_idx = pd.read_csv(in_dir / "X_train_idx.csv")
+    X_val_idx = pd.read_csv(in_dir / "X_val_idx.csv")
+    X_test_idx = pd.read_csv(in_dir / "X_test_idx.csv")
     return X_train_idx, X_val_idx, X_test_idx
 
 
@@ -143,11 +155,11 @@ def load_training_data() -> Tuple[sparse.csr.csr_matrix, np.ndarray]:
         Tuple[sparse.csr.csr_matrix, np.ndarray]: [description]
     """
     # Load features
-    features = sparse.load_npz(ENCODED_DATA + "encoded_sa_el_features.npz")
+    features = sparse.load_npz(ENCODED_DATA / "encoded_sa_el_features.npz")
 
     # Load labels
     labels = pd.read_csv(
-        ENCODED_DATA + "encoded_sa_el_labels.csv", index_col=0
+        ENCODED_DATA / "encoded_sa_el_labels.csv", index_col=0
     )
 
     return features, labels
@@ -163,7 +175,7 @@ def load_raw_file(fname: str) -> pd.DataFrame:
         pd.DataFrame: loaded files
     """
     df = pd.read_csv(
-        RAW_DATA + fname, names=RAW_PUBLIC_FILE_COL_NAMES, sep="\t"
+        RAW_DATA / fname, names=RAW_PUBLIC_FILE_COL_NAMES, sep="\t"
     )
     return df
 
@@ -185,7 +197,7 @@ def load_raw_files(list_of_peptide_files: List) -> pd.DataFrame:
     return loaded_data
 
 
-def load_public_mouse_data() -> pd.DataFrame:
+def load_nod_data() -> pd.DataFrame:
     """Load peprocessed mouse data
     Source: https://www.nature.com/articles/s41590-020-0623-7.pdf?proof=t
 
@@ -193,8 +205,17 @@ def load_public_mouse_data() -> pd.DataFrame:
         pd.DataFrame: preprocessed mouse data.
     """
     return pd.read_csv(
-        MOUSE_PUBLIC + "preprocessed_public_mouse_data.csv", index_col=0
+        PROCESSED_DATA / "preprocessed_public_mouse_data.csv", index_col=0
     )
+
+
+def load_iedb_data() -> pd.DataFrame:
+    """Loads preprocessed iedb data.
+
+    Returns:
+        pd.DataFrame: IEDB data.
+    """
+    return pd.read_csv(PROCESSED_DATA / "sa_data.csv", index_col=0)
 
 
 def load_public_mouse_train_data() -> pd.DataFrame:
@@ -204,7 +225,7 @@ def load_public_mouse_train_data() -> pd.DataFrame:
     Returns:
         pd.DataFrame: preprocessed mouse data.
     """
-    return pd.read_csv(MOUSE_PUBLIC + "train_set.csv", index_col=0)
+    return pd.read_csv(RAW_DATA / "train_set.csv", index_col=0)
 
 
 def load_K562_dataset() -> Tuple[pd.DataFrame, pd.DataFrame]:
@@ -213,9 +234,7 @@ def load_K562_dataset() -> Tuple[pd.DataFrame, pd.DataFrame]:
     Returns:
         Tuple[pd.DataFrame, pd.DataFrame]: [description]
     """
-    supp_tables = pd.ExcelFile(
-        DATA_DIR + "maria_data/supplementary_tables.xlsx"
-    )
+    supp_tables = pd.ExcelFile(RAW_DATA / "supplementary_tables.xlsx")
     DRB1_0101_ligands = supp_tables.parse("TableS5", header=1)
     DRB1_0404_ligands = supp_tables.parse("TableS6", header=1)
     return DRB1_0101_ligands, DRB1_0404_ligands
@@ -242,9 +261,9 @@ def load_uniprot() -> pd.DataFrame:
         "Sequence Version",
     ]
     uniprot = pd.DataFrame(columns=uniprot_columns)
-    if not Path(CACHE_DIR + "uniprot_df_shard_1.csv").is_file():
+    if not Path(CACHE_DIR / "uniprot_df_shard_1.csv").is_file():
         # Caching results
-        with open(DATA_DIR + "uniprot/uniprot_sprot.fasta") as handle:
+        with open(RAW_DATA / "uniprot_sprot.fasta") as handle:
             seq_counter = 0
             file_counter = 0
             for values in tqdm(SimpleFastaParser(handle)):
@@ -309,7 +328,7 @@ def load_uniprot() -> pd.DataFrame:
                 )
                 if seq_counter % 10000 == 0:
                     uniprot.to_csv(
-                        CACHE_DIR + f"uniprot_df_shard_{file_counter}.csv"
+                        CACHE_DIR / f"uniprot_df_shard_{file_counter}.csv"
                     )
                     file_counter += 1
                     uniprot = pd.DataFrame(columns=uniprot_columns)
@@ -322,7 +341,7 @@ def load_uniprot() -> pd.DataFrame:
         ]
         uniprot = pd.DataFrame(columns=uniprot_columns)
         for shard in uniprot_shards:
-            uniprot_shard_df = pd.read_csv(CACHE_DIR + shard, index_col=0)
+            uniprot_shard_df = pd.read_csv(CACHE_DIR / shard, index_col=0)
             uniprot = uniprot.append(uniprot_shard_df)
     return uniprot
 
@@ -334,9 +353,7 @@ def load_melanoma_dataset() -> pd.DataFrame:
     Returns:
         pd.DataFrame: melanoma dataset with cleaned columns.
     """
-    melanoma_excel_file = pd.ExcelFile(
-        DATA_DIR + "maria_data/melanoma_untyped.xlsx"
-    )
+    melanoma_excel_file = pd.ExcelFile(RAW_DATA / "melanoma_untyped.xlsx")
     melanoma_table = melanoma_excel_file.parse(
         "Supplementary data 2", header=1
     )

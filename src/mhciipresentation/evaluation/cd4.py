@@ -46,6 +46,7 @@ from mhciipresentation.utils import (
     compute_performance_measures,
     encode_aa_sequences,
     flatten_lists,
+    make_dir,
     make_predictions_with_transformer,
     render_roc_curve,
     sample_from_human_uniprot,
@@ -57,7 +58,7 @@ set_pandas_options()
 
 def main():
     print("CD4")
-    epitope_df = epitope_file_parser(EPITOPES_DIR + "CD4_epitopes.fsa")
+    epitope_df = epitope_file_parser(RAW_DATA / "CD4_epitopes.fsa")
     epitope_df["label"] = 1
     epitope_df = attach_pseudosequence(epitope_df)
     epitope_df["peptides_and_pseudosequence"] = epitope_df["peptide"].astype(
@@ -89,23 +90,38 @@ def main():
     ) + decoys["Pseudosequence"].astype(str)
     data = pd.concat(
         [
-            decoys[["peptides_and_pseudosequence", "label"]],
-            epitope_df[["peptides_and_pseudosequence", "label"]],
+            decoys[["peptides_and_pseudosequence", "Sequence", "label"]],
+            epitope_df[["peptides_and_pseudosequence", "Sequence", "label"]],
         ]
     )
 
-    X = encode_aa_sequences(data.peptides_and_pseudosequence, AA_TO_INT,)
+    if FLAGS.model_with_pseudo_path is not None:
+        X = encode_aa_sequences(
+            data.peptides_and_pseudosequence,
+            AA_TO_INT,
+        )
+    else:
+        X = encode_aa_sequences(
+            data.Sequence,
+            AA_TO_INT,
+        )
+
     y = data.label.values
-    batch_size = 5000
+    #batch_size = 5000
 
     device = torch.device("cuda" if USE_GPU else "cpu")  # training device
-    model, input_dim = setup_model(device, FLAGS.model_with_pseudo_path)
+    if FLAGS.model_with_pseudo_path is not None:
+        model, input_dim, max_len = setup_model(device, FLAGS.model_with_pseudo_path)
+    else:
+        model, input_dim, max_len = setup_model(device, FLAGS.model_wo_pseudo_path)
 
+    batch_size = max_len
     predictions = make_predictions_with_transformer(
         X, batch_size, device, model, input_dim, AA_TO_INT["X"]
     )
     performance = compute_performance_measures(predictions, y)
     print(performance)
+    make_dir(FLAGS.results)
     render_roc_curve(
         predictions,
         y,
@@ -123,12 +139,12 @@ if __name__ == "__main__":
         type=str,
         help="Path to the checkpoint of the model to evaluate.",
     )
-    # parser.add_argument(
-    #     "--model_wo_pseudo_path",
-    #     "-modwop",
-    #     type=str,
-    #     help="Path to the checkpoint of the model to evaluate.",
-    # )
+    parser.add_argument(
+        "--model_wo_pseudo_path",
+        "-modwop",
+        type=str,
+        help="Path to the checkpoint of the model to evaluate.",
+    )
     parser.add_argument(
         "--results",
         "-ress",

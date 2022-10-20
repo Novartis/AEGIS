@@ -50,7 +50,7 @@ def check_cache(input_file: str):
     if (
         not Path(CACHE_DIR).exists()
         or FORCE_PREPROCESSING
-        or not Path(CACHE_DIR + input_file).exists()
+        or not Path(CACHE_DIR / input_file).exists()
     ):
         make_dir(CACHE_DIR)
         return False
@@ -85,6 +85,7 @@ def shuffle_features_and_labels(
     idx = np.random.permutation(len(X))
     return X[idx], y[idx]
 
+    
 
 def pandas2fasta(
     df: pd.DataFrame,
@@ -137,22 +138,16 @@ def uniquify(input_seq: list, suffs: Iterator[int] = count(1)):
     return seq
 
 
-def make_dir(directory: str) -> None:
+def make_dir(directory: Path) -> None:
     """Makes directory and does not stop if it is already created.
 
+    TODO: since converting to pathlib, this function is not needed anymore.
+
     Args:
-        directory (str): directory to be created
+        directory (Path): directory to be created
     """
 
-    try:
-        os.mkdir(directory)
-    except OSError:
-        print(
-            f"Creation of the directory {directory} failed, probably already "
-            f"exists"
-        )
-    else:
-        print(f"Successfully created the directory {directory}")
+    Path(directory).mkdir(parents=True, exist_ok=True)
 
 
 def aa_seq_to_int(s: str, aa_to_int: dict) -> List[int]:
@@ -223,7 +218,8 @@ def add_peptide_context(
 
 
 def join_peptide_with_pseudosequence(
-    peptide_with_context: pd.Series, pseudosequence: pd.Series,
+    peptide_with_context: pd.Series,
+    pseudosequence: pd.Series,
 ) -> pd.Series:
     """Adds the peptide, pads it and appends the associated pseudosequence.
         Given a peptide ABCDEF and and a pseudosequence HIJK, the function
@@ -304,7 +300,7 @@ def prepare_batch(
             (batch_size, pad_width) and reshaped labels
     """
     dataset_size = len(features)
-    if not labels:
+    if labels is None:
         labels = np.zeros(len(features))
 
     batch_in = []
@@ -584,7 +580,7 @@ def save_model(model: nn.Module, out_dir: str) -> None:
     torch.save(model.state_dict(), out_dir)
 
 
-def save_training_params(training_params: Dict, out_dir: str) -> None:
+def save_training_params(training_params: Dict, out_dir: Path) -> None:
     """Saves a .json file with the training hyperparameters of the model
 
     Args:
@@ -592,7 +588,7 @@ def save_training_params(training_params: Dict, out_dir: str) -> None:
             training
         out_dir (str): where to save training_params
     """
-    with open(out_dir + "training_params.json", "w") as outfile:
+    with open(out_dir / "training_params.json", "w") as outfile:
         json.dump(training_params, outfile)
 
 
@@ -702,7 +698,7 @@ def render_roc_curve(y_pred, y_true, dest_dir, title, fname):
     plt.ylabel("True Positive Rate")
     plt.title(title)
     plt.legend(loc="lower right")
-    plt.savefig(dest_dir + fname + ".png")
+    plt.savefig(os.path.join(dest_dir,fname+".png"))
 
 
 def sample_peptides(hs_uniprot_str: str, peptide_length: int, n: int) -> List:
@@ -772,7 +768,7 @@ def attach_pseudosequence(epitope_df: pd.DataFrame) -> pd.Series:
         how="outer",
         left_on="MHC_molecule",
         right_on="Name",
-    ).dropna()["Pseudosequence"]
+    ).dropna()
 
 
 def assign_pseudosequences(
