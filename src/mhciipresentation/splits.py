@@ -13,7 +13,7 @@ https://academic.oup.com/nar/article/48/W1/W449/5837056
 import os
 import random
 from pathlib import Path
-from typing import Set
+from typing import Set, Tuple
 
 import numpy as np
 import pandas as pd
@@ -29,7 +29,7 @@ from mhciipresentation.utils import make_dir
 def remove_overlapping_peptides(
     peptides_1: Set,
     peptides_2: Set,
-) -> pd.Series:
+) -> Tuple[Set, Set]:
     """Removes peptides occuring in peptides_2 from peptides_1
 
     Args:
@@ -42,10 +42,10 @@ def remove_overlapping_peptides(
     """
     # Creates a difference between two sets to get the duplicate peptides as
     # fast as possible
-    peptides_1_reduced = peptides_1.difference(peptides_2)
+    peptides_2_reduced = peptides_2.difference(peptides_1)
 
     # Remove features and labels that correspond to duplicate peptides
-    return peptides_1_reduced, peptides_2
+    return peptides_1, peptides_2_reduced
 
 
 def validate_split(
@@ -142,13 +142,13 @@ def random_splitting(
     X_train_data = data[data["peptide"].isin(X_train)]
     X_eval_data = data[data["peptide"].isin(X_eval)]
 
-    # Generate dev and validation set from test set
+    # Generate val and validation set from test set
     X_val = X_eval_data.sample(frac=val_frac, random_state=42).peptide
     X_test = X_eval_data.drop(X_val.index).peptide
 
     # Remove peptides occuring in validation set from test set
     if X_test.shape[0] != 0:
-        X_test, X_val = remove_overlapping_peptides(set(X_val), set(X_test))
+        X_test, X_val = remove_overlapping_peptides(set(X_test), set(X_val))
         X_test_data = data[data["peptide"].isin(X_test)]
     else:
         X_test_data = None
@@ -166,10 +166,10 @@ def random_splitting(
         )
 
     # Summary of samples sizes
-    label_dist_summary(X_train_data, "target_value", "training")
-    label_dist_summary(X_val_data, "target_value", "validation")
-    if X_test_data is not None:
-        label_dist_summary(X_test_data, "target_value", "testing")
+    # label_dist_summary(X_train_data, "target_value", "training")
+    # label_dist_summary(X_val_data, "target_value", "validation")
+    # if X_test_data is not None:
+    #     label_dist_summary(X_test_data, "target_value", "testing")
 
     # Writing the data
     make_dir(out_dir)
@@ -178,21 +178,31 @@ def random_splitting(
     print("Written random splits successfully")
 
 
-def random_splitting_nod(data: pd.DataFrame) -> None:
+def random_splitting_nod(
+    data: pd.DataFrame,
+    eval_frac: float = 0.2,
+    val_frac: float = 0.5,
+) -> None:
     """We stratify by protein name.
 
     Args:
-        data (pd.DataFrame): dataset to stratify
+        data (pd.DataFrame): dataset to split
+        test_frac (float): fraction of peptides used for testing
+        val_frac (float): fraction of peptides used for validation
     """
     unique_proteins = set(
         data.loc[data.label == 1]["Uniprot Accession"].to_list()
     )
     val_proteins = set(
-        random.sample(unique_proteins, int(len(unique_proteins) * 0.1))
+        random.sample(
+            list(unique_proteins),
+            int(len(unique_proteins) * eval_frac * val_frac),
+        )
     )
     test_proteins = set(
         random.sample(
-            unique_proteins - val_proteins, int(len(unique_proteins) * 0.1)
+            list(unique_proteins - val_proteins),
+            int(len(unique_proteins) * eval_frac * (1 - val_frac)),
         )
     )
     train_proteins = unique_proteins - test_proteins.union(val_proteins)
@@ -241,7 +251,7 @@ def main():
         sa_data,
         out_dir=SPLITS_DIR / "random_iedb/",
         val_frac=0.5,
-        eval_frac=0.05,
+        eval_frac=0.3,
     )
 
     print("Random splitting of mouse data")
