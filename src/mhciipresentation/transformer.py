@@ -392,15 +392,15 @@ def main():
 
     X_train, y_train = shuffle_features_and_labels(X_train, y_train)
 
-    max_len = 6144
+    max_len = 5000
     batch_size = max_len * torch.cuda.device_count()  
-    epochs = 1000
+    epochs = 500
     criterion = nn.BCELoss()
 
     lr = float(1e-5)
     patience = 10
     input_dim = (
-        33 + 2 if FLAGS.features == "seq_only" else 33 + 2 + 2*34
+        33 + 2 if FLAGS.features == "seq_only" else 33 + 2 + 34
     )  # size of longest sequence (33, from NOD mice + start/stop)
     n_tokens = len(list(AA_TO_INT.values()))
     embedding_size = 128  # embedding dimension
