@@ -143,8 +143,8 @@ def random_splitting(
     X_eval_data = data[data["peptide"].isin(X_eval)]
 
     # Generate val and validation set from test set
-    X_val = X_eval_data.sample(frac=val_frac, random_state=42).peptide
-    X_test = X_eval_data.drop(X_val.index).peptide
+    X_val = X_eval_data.sample(frac=val_frac, random_state=42).X
+    peptide_test = X_eval_data.drop(X_val.index).peptide
 
     # Remove peptides occuring in validation set from test set
     if X_test.shape[0] != 0:
@@ -184,61 +184,109 @@ def controlled_random_splitting(
     eval_frac_in: float = 0.05,
     val_frac: float = 0.5,
 ) -> None:
+    """Performs random splitting ensuring peptide exclusion while
+    ensuring desired proportions.
 
+    If we randomly split applying random exclusion criteria we have
+    issues with widely differing final dataset proportions than the
+    desired ones due to unfortunate peptide frequency distributions in
+    the binding affinity data. Therefore we manually tweak the
+    splitting to ensure adequate proportions while ensuring the splits
+    do not contain peptides from other datasets
+
+    Args:
+        data (pd.DataFrame): the data containing all features, data
+            sources and target values
+    
+        out_dir (str, optional): where to write the resulting
+            splits. Defaults to SPLITS_DIR/"random/".
+    
+        eval_frac_in (float, optional): evaluation set fraction
+            (test+val). Defaults to 0.05.
+    
+        val_frac (float, optional): . Defaults to 0.5.
+    """
     ds_types = list()
     for el in data.iterrows():
         if "_EL" in el[1]["file_name"]:
-            if el[1]["target_value"]==0:
+            if el[1]["target_value"] == 0:
                 ds_types.append("SYN")
-            else: 
+            else:
                 ds_types.append("EL")
         else:
             ds_types.append("BA")
-    
-    data=data.assign(ds_type=ds_types)
-    
-    X_train=list()
-    X_val=list()
-    X_test=list()
 
-    species_ds=dict()
-    species_ds["human"] = data[~data["MHC_molecule"].str.contains("mouse") | data["MHC_molecule"].str.contains("H-2")]
-    species_ds["mouse"] = data[data["MHC_molecule"].str.contains("mouse") | data["MHC_molecule"].str.contains("H-2")]
+    data = data.assign(ds_type=ds_types)
 
-    for species in ["human","mouse"]:
+    X_train = list()
+    X_val = list()
+    X_test = list()
+
+    species_ds = dict()
+    species_ds["human"] = data[
+        ~data["MHC_molecule"].str.contains("mouse")
+        | data["MHC_molecule"].str.contains("H-2")
+    ]
+    species_ds["mouse"] = data[
+        data["MHC_molecule"].str.contains("mouse")
+        | data["MHC_molecule"].str.contains("H-2")
+    ]
+
+    for species in ["human", "mouse"]:
         species_data = species_ds[species]
         for ds_type in list(species_data["ds_type"].unique()):
-            if ds_type=="BA":
+            if ds_type == "BA":
                 if species == "human":
-                    eval_frac=eval_frac_in/10
-                else: 
-                    eval_frac=eval_frac_in*10
-            else: 
-                eval_frac=eval_frac_in
-
-            tmp_data = species_data[species_data["ds_type"]==ds_type]
-            tmp_data_unique=tmp_data.drop(columns = ["ds_type", "Alleles", "number_of_alleles", 
-                                                     "Pseudosequence", "file_name", "MHC_molecule", "peptide_context"]).drop_duplicates()
-        
-            X_train_tmp, X_eval_tmp, y_train, y_eval = train_test_split(tmp_data_unique.peptide.values,tmp_data_unique.target_value.values, 
-                                                                        test_size=eval_frac, random_state=42,)
-            if ds_type=="BA":
-                X_eval_tmp, X_train_tmp = remove_overlapping_peptides(set(X_eval_tmp), set(X_train_tmp))
+                    eval_frac = eval_frac_in / 10
+                else:
+                    eval_frac = eval_frac_in * 10
             else:
-                X_train_tmp, X_eval_tmp = remove_overlapping_peptides(set(X_train_tmp), set(X_eval_tmp))
-        
-            print("%s:" %ds_type)
-            print("X_eval fraction: %s" %(len(X_eval_tmp)/len(tmp_data_unique)))
+                eval_frac = eval_frac_in
 
-            X_val_tmp, X_test_tmp = train_test_split(np.array(list(X_eval_tmp)), test_size=0.5,random_state=42)
+            tmp_data = species_data[species_data["ds_type"] == ds_type]
+            tmp_data_unique = tmp_data.drop(
+                columns=[
+                    "ds_type",
+                    "Alleles",
+                    "number_of_alleles",
+                    "Pseudosequence",
+                    "file_name",
+                    "MHC_molecule",
+                    "peptide_context",
+                ]
+            ).drop_duplicates()
+
+            X_train_tmp, X_eval_tmp, y_train, y_eval = train_test_split(
+                tmp_data_unique.peptide.values,
+                tmp_data_unique.target_value.values,
+                test_size=eval_frac,
+                random_state=42,
+            )
+            if ds_type == "BA":
+                X_eval_tmp, X_train_tmp = remove_overlapping_peptides(
+                    set(X_eval_tmp), set(X_train_tmp)
+                )
+            else:
+                X_train_tmp, X_eval_tmp = remove_overlapping_peptides(
+                    set(X_train_tmp), set(X_eval_tmp)
+                )
+
+            print("%s:" % ds_type)
+            print(
+                "X_eval fraction: %s"
+                % (len(X_eval_tmp) / len(tmp_data_unique))
+            )
+
+            X_val_tmp, X_test_tmp = train_test_split(
+                np.array(list(X_eval_tmp)), test_size=0.5, random_state=42
+            )
 
             X_train.extend(X_train_tmp)
             X_val.extend(X_val_tmp)
             X_test.extend(X_test_tmp)
-            print("train: %s" %len(X_train))
-            print("val: %s" %len(X_val))
-            print("test: %s" %len(X_test))
-
+            print("train: %s" % len(X_train))
+            print("val: %s" % len(X_val))
+            print("test: %s" % len(X_test))
 
     X_train, X_val = remove_overlapping_peptides(set(X_train), set(X_val))
     X_train, X_test = remove_overlapping_peptides(set(X_train), set(X_test))
@@ -248,7 +296,9 @@ def controlled_random_splitting(
     X_val_data = data[data["peptide"].isin(X_val)]
     X_test_data = data[data["peptide"].isin(X_test)]
 
-    validate_split(X_train_data.peptide, X_val_data.peptide, X_test_data.peptide)
+    validate_split(
+        X_train_data.peptide, X_val_data.peptide, X_test_data.peptide
+    )
 
     save_idx(out_dir, X_train_data, X_val_data, X_test_data)
 
