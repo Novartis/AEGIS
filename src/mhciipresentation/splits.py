@@ -303,7 +303,64 @@ def controlled_random_splitting(
     save_idx(out_dir, X_train_data, X_val_data, X_test_data)
 
 
-def random_splitting_nod(
+
+def random_splitting_nod_v1(data: pd.DataFrame) -> None:
+    """We stratify by protein name.
+
+    Args:
+        data (pd.DataFrame): dataset to stratify
+    """
+    unique_proteins = set(
+        data.loc[data.label == 1]["Uniprot Accession"].to_list()
+    )
+    val_proteins = set(
+        random.sample(unique_proteins, int(len(unique_proteins) * 0.1))
+    )
+    test_proteins = set(
+        random.sample(
+            unique_proteins - val_proteins, int(len(unique_proteins) * 0.1)
+        )
+    )
+    train_proteins = unique_proteins - test_proteins.union(val_proteins)
+
+    X_train_data = data.loc[data["Uniprot Accession"].isin(train_proteins)]
+    X_val_data = data.loc[data["Uniprot Accession"].isin(val_proteins)]
+    X_test_data = data.loc[data["Uniprot Accession"].isin(test_proteins)]
+
+    X_train_data_neg = data.loc[data.label == 0].sample(len(X_train_data) * 5)
+    data = data.loc[data.label == 0].loc[
+        ~data["Peptide Sequence"].isin(
+            set(X_train_data_neg["Peptide Sequence"].to_list())
+        )
+    ]
+    X_val_data_neg = data.loc[data.label == 0].sample(len(X_val_data) * 5)
+    data = data.loc[data.label == 0].loc[
+        ~data["Peptide Sequence"].isin(
+            set(X_val_data_neg["Peptide Sequence"].to_list()).union(
+                set(X_train_data_neg["Peptide Sequence"].to_list())
+            )
+        )
+    ]
+    X_test_data_neg = data.loc[data.label == 0].sample(len(X_test_data) * 5)
+
+    X_train_data = X_train_data.append(X_train_data_neg)
+    X_val_data = X_val_data.append(X_val_data_neg)
+    X_test_data = X_test_data.append(X_test_data_neg)
+
+    # Summary of samples sizes
+    label_dist_summary(X_train_data, "label", "training")
+    label_dist_summary(X_val_data, "label", "validation")
+    label_dist_summary(X_test_data, "label", "testing")
+
+    # Writing the data
+    out_dir = SPLITS_DIR / "random_nod"
+    make_dir(out_dir)
+    save_idx(out_dir, X_train_data, X_val_data, X_test_data)
+    print("Written random splits successfully")
+
+
+
+def random_splitting_nod_v2(
     data: pd.DataFrame,
     eval_frac: float = 0.2,
     val_frac: float = 0.5,
@@ -381,7 +438,7 @@ def main():
 
     print("Random splitting of mouse data")
     mouse_data = load_nod_data()
-    random_splitting_nod(mouse_data)
+    random_splitting_nod_v1(mouse_data)
 
 
 if __name__ == "__main__":
