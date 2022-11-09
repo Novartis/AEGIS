@@ -33,16 +33,16 @@ def setup_model_local(device: torch.device, model_path: str):
         os.path.join(os.path.dirname(model_path), "training_params.json"), "r"
     ) as infile:
         data = json.loads(infile.read())
-        input_dim = data["input_dim"]
-        n_tokens = data["n_tokens"]
-        embedding_size = data["embedding_size"]
-        n_attn_heads = data["n_attn_heads"]
-        enc_ff_hidden = data["enc_ff_hidden"]
-        ff_hidden = data["ff_hidden"]
-        nlayers = data["nlayers"]
-        dropout = data["dropout"]
+        input_dim = int(data["input_dim"])
+        n_tokens = int(data["n_tokens"])
+        embedding_size = int(data["embedding_size"])
+        n_attn_heads = int(data["n_attn_heads"])
+        enc_ff_hidden = int(data["enc_ff_hidden"])
+        ff_hidden = int(data["ff_hidden"])
+        nlayers = int(data["nlayers"])
+        dropout = float(data["dropout"])
 
-        if "max_len" in data.keys():
+        if "max_len" in data:
             max_len = int(data["max_len"])
         else:
             max_len = 5000
@@ -60,14 +60,14 @@ def setup_model_local(device: torch.device, model_path: str):
         max_len,
     )
     if USE_GPU:
-        model = nn.DataParallel(model, device_ids=[0])  # type: ignore
+        model = nn.DataParallel(model, device_ids=list(range(torch.cuda.device_count())))  # type: ignore
     else:
         model = nn.DataParallel(  # type: ignore
             model, device_ids=[i for i in range(30)]
         )
     model = load_model_weights(model, model_path, device)
     model.eval()
-    return model, input_dim
+    return model, input_dim, max_len
 
 
 def setup_model(device: torch.device, model_path: str):
@@ -112,7 +112,7 @@ def setup_model(device: torch.device, model_path: str):
         max_len,
     )
     if USE_GPU:
-        model = nn.DataParallel(model, device_ids=[0])  # type: ignore
+        model = nn.DataParallel(model, device_ids=list(range(torch.cuda.device_count())))  # type: ignore
     else:
         model = nn.DataParallel(  # type: ignore
            model, device_ids=[i for i in range(30)]

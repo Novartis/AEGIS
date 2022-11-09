@@ -221,10 +221,10 @@ def main():
     }
 
     MODELPATH = models_dict[modeltype]
-
-    batch_size = 5000
     device = torch.device("cuda" if USE_GPU else "cpu")  # training device
-    model, input_dim = setup_model_local(device, MODELPATH)
+    model, input_dim, max_len = setup_model_local(device, MODELPATH)
+
+    batch_size = max_len * torch.cuda.device_count()
 
     # run prediction
     predictions = make_predictions_with_transformer(

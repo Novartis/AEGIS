@@ -474,6 +474,10 @@ def main():
     no_progress = 0
     print(f"Features: {FLAGS.features}")
     print(f"Data Sources: {FLAGS.data_source}")
+    print("batch size: %s" %batch_size)
+    print("# training data points: %i" % len(X_train))
+    print("# labels == 0: %i"  % sum(y_train==0))
+    print("# labels != 0: %i" % sum(y_train!=0))
     print("Starting training")
     for epoch in range(1, epochs + 1):
         epoch_start_time = time.time()

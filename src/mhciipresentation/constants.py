@@ -8,8 +8,13 @@ This file provides constants used throughout this project.
 """
 
 # Compute-related options
+import torch.cuda
+
 N_JOBS = 10
-USE_GPU = True
+if torch.cuda.is_available():
+    USE_GPU = True
+else:
+    USE_GPU = False
 
 N_MOTIF_FOLDS = 5
 
