@@ -700,11 +700,30 @@ def render_roc_curve(y_pred, y_true, dest_dir, title, fname):
     plt.title(title)
     plt.legend(loc="lower right")
     plt.savefig(os.path.join(dest_dir, fname + ".png"))
+    plt.close()
 
 
 def render_precision_recall_curve(y_pred, y_true, dest_dir, title, fname):
+    from matplotlib.collections import LineCollection
+    from matplotlib.colors import ListedColormap, BoundaryNorm
     precision, recall, thresholds = precision_recall_curve(y_true, y_pred)
-    PrecisionRecallDisplay(precision=precision, recall=recall)
+    #displ=PrecisionRecallDisplay(precision=precision, recall=recall)
+    auprc=auc(recall, precision)
+    points = np.array([recall, precision]).T.reshape(-1, 1, 2)
+    segments = np.concatenate([points[:-1], points[1:]], axis=1)
+    fig, axs = plt.subplots(1, 1)
+    norm = plt.Normalize(thresholds.min(),thresholds.max())
+    lc = LineCollection(segments, cmap='viridis', norm=norm)
+    lc.set_array(thresholds)
+    lc.set_linewidth(2)
+    line = axs.add_collection(lc)
+    fig.colorbar(line, ax=axs)
+    plt.xlim([0.0, 1.0])
+    plt.ylim([0.5, 1.0])
+    plt.xlabel("Recall")
+    plt.ylabel("Precision")
+    plt.text(0.05,0.52,"AUPRC curve (area = %0.2f)" % auprc,)
+    #displ.plot()
     plt.title(title)
     plt.savefig(os.path.join(dest_dir, fname + "prec_rec_curve" + ".png"))
 
