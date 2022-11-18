@@ -29,6 +29,7 @@ from sklearn.metrics import (
     confusion_matrix,
     matthews_corrcoef,
     precision_recall_fscore_support,
+    PrecisionRecallDisplay,
     roc_auc_score,
     roc_curve,
 )
@@ -44,6 +45,7 @@ from mhciipresentation.constants import (
 )
 from mhciipresentation.loaders import load_pseudosequences, load_uniprot
 from mhciipresentation.paths import CACHE_DIR
+from sklearn.metrics import precision_recall_curve
 
 
 def check_cache(input_file: str):
@@ -85,7 +87,6 @@ def shuffle_features_and_labels(
     idx = np.random.permutation(len(X))
     return X[idx], y[idx]
 
-    
 
 def pandas2fasta(
     df: pd.DataFrame,
@@ -698,7 +699,14 @@ def render_roc_curve(y_pred, y_true, dest_dir, title, fname):
     plt.ylabel("True Positive Rate")
     plt.title(title)
     plt.legend(loc="lower right")
-    plt.savefig(os.path.join(dest_dir,fname+".png"))
+    plt.savefig(os.path.join(dest_dir, fname + ".png"))
+
+
+def render_precision_recall_curve(y_pred, y_true, dest_dir, title, fname):
+    precision, recall, thresholds = precision_recall_curve(y_true, y_pred)
+    PrecisionRecallDisplay(precision=precision, recall=recall)
+    plt.title(title)
+    plt.savefig(os.path.join(dest_dir, fname + "prec_rec_curve" + ".png"))
 
 
 def sample_peptides(hs_uniprot_str: str, peptide_length: int, n: int) -> List:

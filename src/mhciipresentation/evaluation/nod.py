@@ -21,6 +21,7 @@ from mhciipresentation.utils import (
     make_dir,
     make_predictions_with_transformer,
     render_roc_curve,
+    render_precision_recall_curve,
     set_pandas_options,
 )
 
@@ -55,7 +56,7 @@ def handle_public_NOD(
         )
 
     # y = test_data.label.values
-    
+
     predictions = make_predictions_with_transformer(
         X, batch_size, device, model, input_dim, AA_TO_INT["X"]
     )
@@ -69,20 +70,31 @@ def handle_public_NOD(
         "NOD mouse public dataset, different proteins",
         "nod_test",
     )
+    render_precision_recall_curve(
+        predictions,
+        y_test,
+        FLAGS.results,
+        "NOD mouse public dataset, different proteins",
+        "nod_test",
+    )
 
 
 def main():
     device = torch.device("cuda" if USE_GPU else "cpu")  # training device
 
     if FLAGS.model_with_pseudo_path is not None:
-        model, input_dim, max_len = setup_model(device, FLAGS.model_with_pseudo_path)
-        print("model used: %s" %FLAGS.model_with_pseudo_path)
+        model, input_dim, max_len = setup_model(
+            device, FLAGS.model_with_pseudo_path
+        )
+        print("model used: %s" % FLAGS.model_with_pseudo_path)
     else:
-        model, input_dim, max_len = setup_model(device, FLAGS.model_wo_pseudo_path)
-        print("model used: %s" %FLAGS.model_wo_pseudo_path)
+        model, input_dim, max_len = setup_model(
+            device, FLAGS.model_wo_pseudo_path
+        )
+        print("model used: %s" % FLAGS.model_wo_pseudo_path)
 
     batch_size = max_len
-    print ("input_dim: %i, max_len: %i" %(input_dim, max_len))
+    print("input_dim: %i, max_len: %i" % (input_dim, max_len))
 
     handle_public_NOD(model, input_dim, device, batch_size)
 

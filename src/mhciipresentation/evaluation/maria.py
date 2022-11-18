@@ -49,6 +49,7 @@ from mhciipresentation.utils import (
     make_dir,
     make_predictions_with_transformer,
     render_roc_curve,
+    render_precision_recall_curve,
     sample_from_human_uniprot,
     set_pandas_options,
 )
@@ -96,9 +97,13 @@ def handle_K562_dataset(ligands: pd.DataFrame, title: str, fname: str) -> None:
     device = torch.device("cuda" if USE_GPU else "cpu")  # training device
 
     if FLAGS.model_wo_pseudo_path is not None:
-        model, input_dim, max_len = setup_model(device, FLAGS.model_wo_pseudo_path)
+        model, input_dim, max_len = setup_model(
+            device, FLAGS.model_wo_pseudo_path
+        )
     else:
-        model, input_dim, max_len = setup_model(device, FLAGS.model_with_pseudo_path)
+        model, input_dim, max_len = setup_model(
+            device, FLAGS.model_with_pseudo_path
+        )
 
     if FLAGS.model_wo_pseudo_path:
         X = encode_aa_sequences(
@@ -121,6 +126,7 @@ def handle_K562_dataset(ligands: pd.DataFrame, title: str, fname: str) -> None:
     print(performance)
     make_dir(FLAGS.results)
     render_roc_curve(predictions, y, FLAGS.results, title, fname)
+    render_precision_recall_curve(predictions, y, FLAGS.results, title, fname)
 
 
 def handle_melanoma_dataset(
@@ -148,10 +154,14 @@ def handle_melanoma_dataset(
     device = torch.device("cuda" if USE_GPU else "cpu")  # training device
 
     if FLAGS.model_wo_pseudo_path is not None:
-        model, input_dim, max_len = setup_model(device, FLAGS.model_wo_pseudo_path)
+        model, input_dim, max_len = setup_model(
+            device, FLAGS.model_wo_pseudo_path
+        )
     else:
-        model, input_dim, max_len = setup_model(device, FLAGS.model_with_pseudo_path)
-  
+        model, input_dim, max_len = setup_model(
+            device, FLAGS.model_with_pseudo_path
+        )
+
     if FLAGS.model_wo_pseudo_path:
         X = encode_aa_sequences(
             dataset.Sequence,
@@ -171,6 +181,7 @@ def handle_melanoma_dataset(
     performance = compute_performance_measures(predictions, y)
     print(performance)
     render_roc_curve(predictions, y, FLAGS.results, title, fname)
+    render_precision_recall_curve(predictions, y, FLAGS.results, title, fname)
 
 
 def main():
