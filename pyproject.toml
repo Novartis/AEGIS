@@ -68,6 +68,7 @@ black = "^22.8.0"
 pre-commit = "^2.20.0"
 pyright = "^1.1.271"
 jedi = "^0.18.1"
+isort = "^5.10.1"
 
 [build-system]
 requires = ["poetry-core>=1.0.0"]
