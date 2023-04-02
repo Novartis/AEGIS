@@ -9,16 +9,19 @@ File defining all protein language models used in this package.
 
 import math
 
+import pytorch_lightning as pl
 import torch
-from torch import nn
-from torch.autograd import Variable
-from torch.nn import TransformerEncoder, TransformerEncoderLayer
-from torch.nn import functional as F
-from tqdm import tqdm
-
 from mhciipresentation.constants import AA_TO_INT_PTM, USE_GPU
 from mhciipresentation.layers import FeedForward, PositionalEncoding
 from mhciipresentation.utils import prepare_batch
+from torch.autograd import Variable
+from torch.nn import TransformerEncoder, TransformerEncoderLayer
+from torch.nn import functional as F
+from torch.optim.lr_scheduler import ExponentialLR
+from tqdm import tqdm
+
+from torch imporst nn
+
 
 
 class LSTMModel(nn.Module):
@@ -76,7 +79,7 @@ class LSTMModel(nn.Module):
         return logits.double()  # type: ignore
 
 
-class TransformerModel(nn.Module):
+class TransformerModel(pl.LightningModule):
     """Main class for the transformer encoder used in this script."""
 
     def __init__(
@@ -91,6 +94,7 @@ class TransformerModel(nn.Module):
         dropout: float,
         device: torch.device,
         max_len: int = 5000,
+        loss_fn = nn.BCELoss()
     ):
         r"""Initializes TransformerModel, including PositionalEncoding and
             TransformerEncoderLayer
@@ -127,7 +131,9 @@ class TransformerModel(nn.Module):
         )
         self.embedding_size = embedding_size
         self.device = device
+        self.loss_fn = loss_fn
         self.init_weights()
+        
 
     def init_weights(self) -> None:
         """Uniform weight initialization"""
@@ -157,3 +163,50 @@ class TransformerModel(nn.Module):
         )
 
         return output.double()  # type: ignore
+
+    def configure_optimizers(self):
+        optimizer = torch.optim.AdamW(
+            self.parameters(),
+            lr=self.start_learning_rate,
+            weight_decay=self.weight_decay,
+        )
+
+        lr_scheduler = {
+            "scheduler": ExponentialLR(optimizer, gamma=0.9), # TODO: replace with one of those oscillating schedulers
+            "monitor": "val_loss",
+            "interval": "step",
+        }
+
+        return {
+            "optimizer": optimizer,
+            "lr_scheduler": lr_scheduler,
+        }
+
+    def evaluate_model(self, y_true, y_pred, prefix):
+        for metric in self.metrics.keys():
+            self.log(
+                f"{prefix}_{metric}",
+                self.metrics[metric](y_true, y_pred),
+                batch_size=y_true.shape[0],
+                sync_dist=True,
+            )
+        pass
+
+    def training_step(self, batch, batch_idx):
+        y_hat = self(batch)
+        loss = self.loss_fn(y_hat, batch.y)
+        self.log("train_loss", loss, batch_size=batch.y.shape[0], sync_dist=True)
+        self.evaluate_model(batch.y, y_hat, "train")
+        return loss
+
+    def validation_step(self, batch, batch_idx):
+        y_hat = self(batch)
+        loss = self.loss_fn(y_hat, batch.y)
+        self.log("val_loss", loss, batch_size=batch.y.shape[0], sync_dist=True)
+        self.evaluate_model(batch.y, y_hat, "validation")
+
+    def test_step(self, batch, batch_idx):
+        y_hat = self(batch)
+        loss = self.loss_fn(y_hat, batch.y)
+        self.log("test_loss", loss, batch_size=batch.y.shape[0], sync_dist=True)
+        self.evaluate_model(batch.y, y_hat, "test")

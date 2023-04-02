@@ -9,6 +9,7 @@ This file contains a number of utility functions used throughout the project.
 
 import copy
 import json
+import logging
 import os
 import random
 from collections import Counter
@@ -23,20 +24,6 @@ import torch
 from Bio import SeqIO
 from Bio.Seq import Seq
 from Bio.SeqRecord import SeqRecord
-from scipy import sparse
-from sklearn.metrics import (
-    auc,
-    confusion_matrix,
-    matthews_corrcoef,
-    precision_recall_fscore_support,
-    PrecisionRecallDisplay,
-    roc_auc_score,
-    roc_curve,
-)
-from sklearn.preprocessing import Binarizer
-from torch import backends, nn
-from tqdm import tqdm
-
 from mhciipresentation.constants import (
     AA_TO_INT,
     AMINO_ACIDS,
@@ -45,7 +32,111 @@ from mhciipresentation.constants import (
 )
 from mhciipresentation.loaders import load_pseudosequences, load_uniprot
 from mhciipresentation.paths import CACHE_DIR
-from sklearn.metrics import precision_recall_curve
+from scipy import sparse
+from sklearn.metrics import (
+    PrecisionRecallDisplay,
+    auc,
+    confusion_matrix,
+    matthews_corrcoef,
+    precision_recall_curve,
+    precision_recall_fscore_support,
+    roc_auc_score,
+    roc_curve,
+)
+from sklearn.preprocessing import Binarizer
+from torch import backends, nn
+from tqdm import tqdm
+
+logger = logging.getLogger(__name__)
+
+
+def count_parameters(model):
+    return sum([p.numel() for p in model.parameters() if p.requires_grad])
+
+
+def set_seeds(seed=42, reproducibility=True):
+    random.seed(seed)
+    np.random.seed(seed)
+    pl.seed_everything(seed)
+
+    if reproducibility:
+        # Ensure that all operations are deterministic on GPU (if used) for reproducibility
+        torch.backends.cudnn.determinstic = True
+        torch.backends.cudnn.benchmark = True
+
+
+def get_accelerator(debug=False, n_devices=1, use_mps=False, use_cuda=False):
+
+    if use_mps and use_cuda:
+        raise ValueError("Cannot use both MPS and CUDA.")
+    if use_mps and n_devices > 1:
+        raise ValueError("Cannot use MPS with multiple devices (yet).")
+
+    if use_mps and not torch.backends.mps.is_available() and not debug:
+        if not torch.backends.mps.is_built():
+            logger.warning(
+                "MPS not available because the current PyTorch install was not "
+                "built with MPS enabled."
+            )
+        else:
+            logger.warning(
+                "MPS not available because the current MacOS version is not 12.3+ "
+                "and/or you do not have an MPS-enabled device on this machine."
+            )
+        if debug:
+            logger.info(
+                "Using CPU instead of MPS because debug mode is enabled."
+            )
+            device = torch.device("cpu")
+        else:
+            logging.info(
+                "Using MPS because debug mode is disabled and MPS is available."
+            )
+            device = torch.device("mps")
+    elif (
+        use_cuda
+        and not use_mps
+        and torch.cuda.is_available()
+        and n_devices == 1
+    ):
+        logging.info(
+            "Using CUDA (single GPU) because debug mode is disabled and CUDA is"
+            " available."
+        )
+        device = torch.device("cuda:0")
+    elif (
+        use_cuda
+        and not use_mps
+        and torch.cuda.is_available()
+        and n_devices > 1
+    ):
+        logging.info(
+            "Using CUDA (multiple GPU) because debug mode is disabled and CUDA is"
+            " available."
+        )
+        device = torch.device("cuda")
+    else:
+        logging.info(
+            "Using CPU because debug mode is enabled or CUDA is not available or MPS is"
+            " not available."
+        )
+        device = torch.device("cpu")
+
+    # Accelerate training with lower precision
+    torch.set_float32_matmul_precision("medium")
+
+    logger.info(f"Using device {device}")
+    return device
+
+
+def setup_training_env(
+    debug, seed, n_devices=1, use_mps=False, use_cuda=False
+):
+    set_seeds(seed=seed)
+    device = get_accelerator(
+        debug, n_devices, use_mps=use_mps, use_cuda=use_cuda
+    )
+    return device
 
 
 def check_cache(input_file: str):
@@ -705,15 +796,16 @@ def render_roc_curve(y_pred, y_true, dest_dir, title, fname):
 
 def render_precision_recall_curve(y_pred, y_true, dest_dir, title, fname):
     from matplotlib.collections import LineCollection
-    from matplotlib.colors import ListedColormap, BoundaryNorm
+    from matplotlib.colors import BoundaryNorm, ListedColormap
+
     precision, recall, thresholds = precision_recall_curve(y_true, y_pred)
-    #displ=PrecisionRecallDisplay(precision=precision, recall=recall)
-    auprc=auc(recall, precision)
+    # displ=PrecisionRecallDisplay(precision=precision, recall=recall)
+    auprc = auc(recall, precision)
     points = np.array([recall, precision]).T.reshape(-1, 1, 2)
     segments = np.concatenate([points[:-1], points[1:]], axis=1)
     fig, axs = plt.subplots(1, 1)
-    norm = plt.Normalize(thresholds.min(),thresholds.max())
-    lc = LineCollection(segments, cmap='viridis', norm=norm)
+    norm = plt.Normalize(thresholds.min(), thresholds.max())
+    lc = LineCollection(segments, cmap="viridis", norm=norm)
     lc.set_array(thresholds)
     lc.set_linewidth(2)
     line = axs.add_collection(lc)
@@ -722,8 +814,12 @@ def render_precision_recall_curve(y_pred, y_true, dest_dir, title, fname):
     plt.ylim([0.5, 1.0])
     plt.xlabel("Recall")
     plt.ylabel("Precision")
-    plt.text(0.05,0.52,"AUPRC curve (area = %0.2f)" % auprc,)
-    #displ.plot()
+    plt.text(
+        0.05,
+        0.52,
+        "AUPRC curve (area = %0.2f)" % auprc,
+    )
+    # displ.plot()
     plt.title(title)
     plt.savefig(os.path.join(dest_dir, fname + "prec_rec_curve" + ".png"))
 
