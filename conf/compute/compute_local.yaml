@@ -1,0 +1,7 @@
+cuda: false
+mps: true
+n_cpu: 4
+num_nodes: 1
+n_gpu: 1
+n_cpu_loader: 4
+use_cache: false

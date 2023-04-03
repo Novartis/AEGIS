@@ -8,75 +8,30 @@ File defining all protein language models used in this package.
 """
 
 import math
+from typing import Any, Dict
 
 import pytorch_lightning as pl
 import torch
+import torchmetrics
 from mhciipresentation.constants import AA_TO_INT_PTM, USE_GPU
 from mhciipresentation.layers import FeedForward, PositionalEncoding
 from mhciipresentation.utils import prepare_batch
+from torch import nn
 from torch.autograd import Variable
 from torch.nn import TransformerEncoder, TransformerEncoderLayer
 from torch.nn import functional as F
 from torch.optim.lr_scheduler import ExponentialLR
+from torchmetrics import (
+    AUROC,
+    ROC,
+    Accuracy,
+    ConfusionMatrix,
+    F1Score,
+    Precision,
+    PrecisionRecallCurve,
+    Recall,
+)
 from tqdm import tqdm
-
-from torch imporst nn
-
-
-
-class LSTMModel(nn.Module):
-    def __init__(
-        self,
-        input_dim,
-        output_dim,
-        embedding_dim,
-        hidden_dim,
-        n_layers,
-        dropout,
-        device,
-    ):
-        super(LSTMModel, self).__init__()
-
-        self.input_dim = input_dim
-        self.embedding_dim = embedding_dim
-        self.hidden_dim = hidden_dim
-        self.n_layers = n_layers
-        self.output_size = output_dim
-        self.device = device
-
-        self.embedding = nn.Embedding(input_dim, embedding_dim)
-        self.lstm = nn.LSTM(
-            input_size=self.embedding_dim,
-            hidden_size=self.hidden_dim,
-            num_layers=self.n_layers,
-            dropout=dropout,
-            bidirectional=True,
-        )
-        self.dropout = nn.Dropout(dropout)
-        self.fc = nn.Linear(self.input_dim * self.hidden_dim * 2, output_dim)
-        self.sigmoid = nn.Sigmoid()
-
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        hidden_state = Variable(
-            torch.zeros(self.n_layers * 2, x.size(1), self.hidden_dim)
-        )
-        hidden_state = (
-            hidden_state.cuda(device=self.device) if USE_GPU else hidden_state
-        )
-
-        cell_state = Variable(
-            torch.zeros(self.n_layers * 2, x.size(1), self.hidden_dim)
-        )
-        cell_state = (
-            cell_state.cuda(device=self.device) if USE_GPU else cell_state
-        )
-
-        embed = self.embedding(x)
-        output, _ = self.lstm(embed, (hidden_state, cell_state))
-        logits = self.sigmoid(
-            self.fc(output.view(-1, self.input_dim * self.hidden_dim * 2))
-        )
-        return logits.double()  # type: ignore
 
 
 class TransformerModel(pl.LightningModule):
@@ -92,9 +47,24 @@ class TransformerModel(pl.LightningModule):
         ff_hidden: int,
         n_layers: int,
         dropout: float,
-        device: torch.device,
         max_len: int = 5000,
-        loss_fn = nn.BCELoss()
+        start_learning_rate: float = 0.001,
+        weight_decay: float = 0.01,
+        loss_fn=nn.BCELoss(),
+        metrics: Dict[str, Any] = {
+            "accuracy": torchmetrics.Accuracy(task="binary"),
+            "auroc": torchmetrics.AUROC(task="binary"),
+            "roc": torchmetrics.ROC(task="binary"),
+            "precision": torchmetrics.Precision(task="binary"),
+            "recall": torchmetrics.Recall(task="binary"),
+            "f1": torchmetrics.F1Score(task="binary"),
+            "precision_recall_curve": torchmetrics.PrecisionRecallCurve(
+                task="binary"
+            ),
+            "confusion_matrix": torchmetrics.ConfusionMatrix(task="binary"),
+            "matthews": torchmetrics.MatthewsCorrCoef(task="binary"),
+            "cohen": torchmetrics.CohenKappa(task="binary"),
+        },
     ):
         r"""Initializes TransformerModel, including PositionalEncoding and
             TransformerEncoderLayer
@@ -123,17 +93,18 @@ class TransformerModel(pl.LightningModule):
             batch_first=True,
         )
         self.transformer_encoder = TransformerEncoder(
-            encoder_layer=encoder_layers, num_layers=n_layers,
+            encoder_layer=encoder_layers,
+            num_layers=n_layers,
         )
         self.embedding = nn.Embedding(n_tokens, embedding_size)
         self.feedforward = FeedForward(
             embedding_size * self.seq_len, ff_hidden, dropout
         )
         self.embedding_size = embedding_size
-        self.device = device
         self.loss_fn = loss_fn
+        self.start_learning_rate = start_learning_rate
+        self.weight_decay = weight_decay
         self.init_weights()
-        
 
     def init_weights(self) -> None:
         """Uniform weight initialization"""
@@ -172,7 +143,9 @@ class TransformerModel(pl.LightningModule):
         )
 
         lr_scheduler = {
-            "scheduler": ExponentialLR(optimizer, gamma=0.9), # TODO: replace with one of those oscillating schedulers
+            "scheduler": ExponentialLR(
+                optimizer, gamma=0.9
+            ),  # TODO: replace with one of those oscillating schedulers
             "monitor": "val_loss",
             "interval": "step",
         }
@@ -195,7 +168,9 @@ class TransformerModel(pl.LightningModule):
     def training_step(self, batch, batch_idx):
         y_hat = self(batch)
         loss = self.loss_fn(y_hat, batch.y)
-        self.log("train_loss", loss, batch_size=batch.y.shape[0], sync_dist=True)
+        self.log(
+            "train_loss", loss, batch_size=batch.y.shape[0], sync_dist=True
+        )
         self.evaluate_model(batch.y, y_hat, "train")
         return loss
 
@@ -208,5 +183,7 @@ class TransformerModel(pl.LightningModule):
     def test_step(self, batch, batch_idx):
         y_hat = self(batch)
         loss = self.loss_fn(y_hat, batch.y)
-        self.log("test_loss", loss, batch_size=batch.y.shape[0], sync_dist=True)
+        self.log(
+            "test_loss", loss, batch_size=batch.y.shape[0], sync_dist=True
+        )
         self.evaluate_model(batch.y, y_hat, "test")

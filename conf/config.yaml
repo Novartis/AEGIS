@@ -1,0 +1,15 @@
+
+defaults:
+  - _self_
+  - compute: compute_cluster
+  - model: sat
+  - training: training
+  - seed: seed
+  - debug: debug
+  # - data: mutag
+  - dataset: zinc 
+  - paths: paths
+    
+hydra:
+  run:
+    dir: outputs/${now:%Y-%m-%d}/${now:%H-%M-%S}

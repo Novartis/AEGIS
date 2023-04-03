@@ -1,0 +1,4 @@
+output: "outputs/"
+dataset: "data/zinc/"
+checkpoints: "checkpoints/"
+cache: ".cache/"

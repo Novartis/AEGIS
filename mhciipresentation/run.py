@@ -59,6 +59,7 @@ from mhciipresentation.utils import (
     save_model,
     save_training_params,
     set_seeds,
+    setup_training_env,
     shuffle_features_and_labels,
 )
 from omegaconf import DictConfig
@@ -531,7 +532,9 @@ def main(aegiscfg: DictConfig):
         ff_hidden,
         nlayers,
         dropout,
-        device,
+        max_len,
+        cfg.training.learning_rate.start_learning_rate,
+        cfg.training.optimizer.weight_decay,
         max_len,
     )
 
@@ -571,23 +574,6 @@ def main(aegiscfg: DictConfig):
     logger.info(f"Total training time is {total_time}")
 
     #######
-
-    # print("Building directories to save checkpoints and logging metrics")
-    # print("LOGS_DIR: %s" % LOGS_DIR)
-
-    # log_dir = LOGS_DIR / Path(
-    #     f"features_{cfg.dataset.feature_set}_source_{cfg.dataset.data_source}"
-    # )
-
-    # print("logdir is: %s" % log_dir)
-
-    # make_dir(LOGS_DIR)
-    # make_dir(log_dir)
-    # make_dir(log_dir / "metrics/")
-    # make_dir(log_dir / "checkpoints/")
-
-    # with open(log_dir / "training_params.json", "w") as p:
-    #     json.dump(training_params, p)
 
     # if USE_SUBSET:
     #     X_train = X_train[:10000]

@@ -1,0 +1,3 @@
+debug: false
+verbose: true
+n_samples_debug: 50
