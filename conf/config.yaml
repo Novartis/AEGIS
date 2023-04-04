@@ -3,11 +3,10 @@ defaults:
   - _self_
   - compute: compute_cluster
   - model: sat
-  - training: training
+  - training: training_debug
   - seed: seed
   - debug: debug
-  # - data: mutag
-  - dataset: zinc 
+  - dataset: dataset
   - paths: paths
     
 hydra:
