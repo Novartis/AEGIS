@@ -16,6 +16,7 @@ import torchmetrics
 from mhciipresentation.constants import AA_TO_INT_PTM, USE_GPU
 from mhciipresentation.layers import FeedForward, PositionalEncoding
 from mhciipresentation.utils import prepare_batch
+from sklearn.preprocessing import Binarizer
 from torch import nn
 from torch.autograd import Variable
 from torch.nn import TransformerEncoder, TransformerEncoderLayer
@@ -47,24 +48,13 @@ class TransformerModel(pl.LightningModule):
         ff_hidden: int,
         n_layers: int,
         dropout: float,
+        pad_num: int,
+        batch_size: int,
         max_len: int = 5000,
         start_learning_rate: float = 0.001,
         weight_decay: float = 0.01,
         loss_fn=nn.BCELoss(),
-        metrics: Dict[str, Any] = {
-            "accuracy": torchmetrics.Accuracy(task="binary"),
-            "auroc": torchmetrics.AUROC(task="binary"),
-            "roc": torchmetrics.ROC(task="binary"),
-            "precision": torchmetrics.Precision(task="binary"),
-            "recall": torchmetrics.Recall(task="binary"),
-            "f1": torchmetrics.F1Score(task="binary"),
-            "precision_recall_curve": torchmetrics.PrecisionRecallCurve(
-                task="binary"
-            ),
-            "confusion_matrix": torchmetrics.ConfusionMatrix(task="binary"),
-            "matthews": torchmetrics.MatthewsCorrCoef(task="binary"),
-            "cohen": torchmetrics.CohenKappa(task="binary"),
-        },
+        metrics: Dict[str, Any] = {},
     ):
         r"""Initializes TransformerModel, including PositionalEncoding and
             TransformerEncoderLayer
@@ -95,15 +85,20 @@ class TransformerModel(pl.LightningModule):
         self.transformer_encoder = TransformerEncoder(
             encoder_layer=encoder_layers,
             num_layers=n_layers,
+            enable_nested_tensor=False,
         )
-        self.embedding = nn.Embedding(n_tokens, embedding_size)
-        self.feedforward = FeedForward(
-            embedding_size * self.seq_len, ff_hidden, dropout
-        )
+
         self.embedding_size = embedding_size
+        self.embedding = nn.Embedding(n_tokens, self.embedding_size)
+        self.feedforward = FeedForward(
+            self.embedding_size * self.seq_len, ff_hidden, dropout
+        )
         self.loss_fn = loss_fn
         self.start_learning_rate = start_learning_rate
         self.weight_decay = weight_decay
+        self.metrics = metrics
+        self.pad_num = pad_num
+        self.batch_size = batch_size
         self.init_weights()
 
     def init_weights(self) -> None:
@@ -111,9 +106,7 @@ class TransformerModel(pl.LightningModule):
         initrange = 0.1
         self.embedding.weight.data.uniform_(-initrange, initrange)
 
-    def forward(
-        self, src: torch.Tensor, src_padding_mask: torch.Tensor
-    ) -> torch.Tensor:
+    def forward(self, data, src_padding_mask) -> torch.Tensor:
         """Defines computation to be performed for each input
 
         Args:
@@ -124,16 +117,32 @@ class TransformerModel(pl.LightningModule):
         Returns:
             torch.Tensor: output of the model
         """
+        src = data[0]
+        src, src_padding_mask = self.add_dummy_sample(src, src_padding_mask)
         src = self.embedding(src) * math.sqrt(self.embedding_size)
         src = self.pos_encoder(src)
         src = self.transformer_encoder(
             src, src_key_padding_mask=src_padding_mask
         )
-        output = self.feedforward(
-            src.view(-1, self.embedding_size * self.seq_len)
-        )
-
+        output = self.feedforward(src.view(src.size(0), -1))[1:]
         return output.double()  # type: ignore
+
+    def add_dummy_sample(self, src, src_padding_mask):
+        src_padding_mask = torch.vstack(
+            [
+                torch.full((self.seq_len,), False).to(self.device),
+                src_padding_mask,
+            ]
+        )
+        src = torch.vstack(
+            [
+                torch.full((self.seq_len,), AA_TO_INT_PTM["E"]).to(
+                    self.device
+                ),
+                src,
+            ]
+        )
+        return src, src_padding_mask
 
     def configure_optimizers(self):
         optimizer = torch.optim.AdamW(
@@ -159,31 +168,58 @@ class TransformerModel(pl.LightningModule):
         for metric in self.metrics.keys():
             self.log(
                 f"{prefix}_{metric}",
-                self.metrics[metric](y_true, y_pred),
+                self.metrics[metric].cpu()(y_pred.cpu(), y_true.cpu().int()),
                 batch_size=y_true.shape[0],
                 sync_dist=True,
             )
         pass
 
+    def generate_padding_mask(self, batch):
+        src_padding_mask = batch[0] == self.pad_num
+        src_padding_mask = src_padding_mask
+        if self.batch_size != batch[0].size(0):
+            src_padding_mask[:, : batch[0].size(0)]
+        return src_padding_mask
+
     def training_step(self, batch, batch_idx):
-        y_hat = self(batch)
-        loss = self.loss_fn(y_hat, batch.y)
+        src_padding_mask = self.generate_padding_mask(batch)
+        y_hat = self(batch, src_padding_mask)
+        loss = self.loss_fn(y_hat, batch[1].view(-1, 1).double())
         self.log(
-            "train_loss", loss, batch_size=batch.y.shape[0], sync_dist=True
+            "train_loss", loss, batch_size=batch[0].shape[0], sync_dist=True
         )
-        self.evaluate_model(batch.y, y_hat, "train")
+        y_true = torch.Tensor(
+            Binarizer(threshold=0.5).transform(
+                batch[1].view(-1, 1).double().cpu()
+            )
+        )
+        self.evaluate_model(y_true, y_hat, "train")
         return loss
 
     def validation_step(self, batch, batch_idx):
-        y_hat = self(batch)
-        loss = self.loss_fn(y_hat, batch.y)
-        self.log("val_loss", loss, batch_size=batch.y.shape[0], sync_dist=True)
-        self.evaluate_model(batch.y, y_hat, "validation")
+        src_padding_mask = self.generate_padding_mask(batch)
+        y_hat = self(batch, src_padding_mask)
+        loss = self.loss_fn(y_hat, batch[1].view(-1, 1).double())
+        self.log(
+            "val_loss", loss, batch_size=batch[0].shape[0], sync_dist=True
+        )
+        y_true = torch.Tensor(
+            Binarizer(threshold=0.5).transform(
+                batch[1].view(-1, 1).double().cpu()
+            )
+        )
+        self.evaluate_model(y_true, y_hat, "validation")
 
     def test_step(self, batch, batch_idx):
-        y_hat = self(batch)
-        loss = self.loss_fn(y_hat, batch.y)
+        src_padding_mask = self.generate_padding_mask(batch)
+        y_hat = self(batch, src_padding_mask)
+        loss = self.loss_fn(y_hat, batch[1].view(-1, 1).double())
         self.log(
-            "test_loss", loss, batch_size=batch.y.shape[0], sync_dist=True
+            "test_loss", loss, batch_size=batch[0].shape[0], sync_dist=True
         )
-        self.evaluate_model(batch.y, y_hat, "test")
+        y_true = torch.Tensor(
+            Binarizer(threshold=0.5).transform(
+                batch[1].view(-1, 1).double().cpu()
+            )
+        )
+        self.evaluate_model(y_true, y_hat, "test")

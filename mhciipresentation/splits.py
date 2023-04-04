@@ -10,6 +10,7 @@ achieved by Nielsen and colleagues in:
 https://academic.oup.com/nar/article/48/W1/W449/5837056
 """
 
+import logging
 import os
 import random
 from pathlib import Path
@@ -17,13 +18,14 @@ from typing import Set, Tuple
 
 import numpy as np
 import pandas as pd
-from sklearn.model_selection import train_test_split
-
 from mhciipresentation.constants import N_MOTIF_FOLDS
 from mhciipresentation.human.human import load_raw_files, select_data_files
 from mhciipresentation.loaders import load_nod_data, load_sa_data
 from mhciipresentation.paths import LEVENSTEIN_DIR, RAW_DATA, SPLITS_DIR
 from mhciipresentation.utils import make_dir
+from sklearn.model_selection import train_test_split
+
+logger = logging.getLogger(__name__)
 
 
 def remove_overlapping_peptides(
@@ -60,18 +62,18 @@ def validate_split(
         X_test (np.ndarray): testing features
     """
 
-    print(
-        f"Overlap between train and val"
+    logger.info(
+        "Overlap between train and val"
         f" {len(set(X_train).intersection(set(X_val)))}"
     )
     if X_test is not None:
-        print(
-            f"Overlap between train and test"
+        logger.info(
+            "Overlap between train and test"
             f" {len(set(X_train).intersection(set(X_test)))}"
         )
 
-        print(
-            f"Overlap between val and test"
+        logger.info(
+            "Overlap between val and test"
             f" {len(set(X_val).intersection(set(X_test)))}"
         )
 
@@ -107,7 +109,7 @@ def label_dist_summary(
         dataset_name (str): name of the dataset to summarize
     """
     value_cts = data[target_col].value_counts()
-    print(
+    logger.info(
         f"Label distribution in {dataset_name}: negative samples = "
         f" {value_cts[0]}; positive samples = {value_cts[1]}"
     )
@@ -175,7 +177,7 @@ def random_splitting(
     make_dir(out_dir)
 
     save_idx(out_dir, X_train_data, X_val_data, X_test_data)
-    print("Written random splits successfully")
+    logger.info("Written random splits successfully")
 
 
 def controlled_random_splitting(
@@ -197,13 +199,13 @@ def controlled_random_splitting(
     Args:
         data (pd.DataFrame): the data containing all features, data
             sources and target values
-    
+
         out_dir (str, optional): where to write the resulting
             splits. Defaults to SPLITS_DIR/"random/".
-    
+
         eval_frac_in (float, optional): evaluation set fraction
             (test+val). Defaults to 0.05.
-    
+
         val_frac (float, optional): . Defaults to 0.5.
     """
     ds_types = list()
@@ -271,8 +273,8 @@ def controlled_random_splitting(
                     set(X_train_tmp), set(X_eval_tmp)
                 )
 
-            print("%s:" % ds_type)
-            print(
+            logger.info("%s:" % ds_type)
+            logger.info(
                 "X_eval fraction: %s"
                 % (len(X_eval_tmp) / len(tmp_data_unique))
             )
@@ -284,9 +286,9 @@ def controlled_random_splitting(
             X_train.extend(X_train_tmp)
             X_val.extend(X_val_tmp)
             X_test.extend(X_test_tmp)
-            print("train: %s" % len(X_train))
-            print("val: %s" % len(X_val))
-            print("test: %s" % len(X_test))
+            logger.info("train: %s" % len(X_train))
+            logger.info("val: %s" % len(X_val))
+            logger.info("test: %s" % len(X_test))
 
     X_train, X_val = remove_overlapping_peptides(set(X_train), set(X_val))
     X_train, X_test = remove_overlapping_peptides(set(X_train), set(X_test))
@@ -301,7 +303,6 @@ def controlled_random_splitting(
     )
 
     save_idx(out_dir, X_train_data, X_val_data, X_test_data)
-
 
 
 def random_splitting_nod_v1(data: pd.DataFrame) -> None:
@@ -356,8 +357,7 @@ def random_splitting_nod_v1(data: pd.DataFrame) -> None:
     out_dir = SPLITS_DIR / "random_nod"
     make_dir(out_dir)
     save_idx(out_dir, X_train_data, X_val_data, X_test_data)
-    print("Written random splits successfully")
-
+    logger.info("Written random splits successfully")
 
 
 def random_splitting_nod_v2(
@@ -422,11 +422,11 @@ def random_splitting_nod_v2(
     out_dir = SPLITS_DIR / "random_nod"
     make_dir(out_dir)
     save_idx(out_dir, X_train_data, X_val_data, X_test_data)
-    print("Written random splits successfully")
+    logger.info("Written random splits successfully")
 
 
 def main():
-    print("Splitting SA EL + BA data randomly")
+    logger.info("Splitting SA EL + BA data randomly")
     sa_data = load_sa_data()
     make_dir(SPLITS_DIR)
     controlled_random_splitting(
@@ -436,7 +436,7 @@ def main():
         eval_frac_in=0.05,
     )
 
-    print("Random splitting of mouse data")
+    logger.info("Random splitting of mouse data")
     mouse_data = load_nod_data()
     random_splitting_nod_v1(mouse_data)
 

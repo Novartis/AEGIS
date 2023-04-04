@@ -33,16 +33,12 @@ from pathlib import Path
 
 from pyprojroot import here
 
-SRC_DIR = os.path.dirname(os.path.realpath(__file__))
+# CACHE_DIR = Path(os.path.abspath(os.path.join(SRC_DIR, "../../.cache/")))
+CACHE_DIR = here() / Path(".cache/")
 
-CACHE_DIR = Path(os.path.abspath(os.path.join(SRC_DIR, "../../.cache/")))
-#CACHE_DIR = here() / Path(".cache/")
+DATA_DIR = here() / Path("./data/")
 
-DATA_DIR = Path(os.path.abspath(os.path.join(SRC_DIR, "../../data/")))
-#DATA_DIR = here() / Path("./data/")
-
-LOGS_DIR = Path(os.path.abspath(os.path.join(SRC_DIR, "../../logs/")))
-#LOGS_DIR = here() / Path("./logs")
+LOGS_DIR = here() / Path("./logs")
 
 SPLITS_DIR = DATA_DIR / "splits/"
 

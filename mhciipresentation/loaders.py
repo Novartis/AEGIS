@@ -7,6 +7,7 @@ This is the file where all data loader convenience functions are placed.
 
 """
 
+import logging
 import os
 from pathlib import Path
 from typing import List, Tuple
@@ -14,9 +15,6 @@ from typing import List, Tuple
 import numpy as np
 import pandas as pd
 from Bio.SeqIO.FastaIO import SimpleFastaParser
-from scipy import sparse
-from tqdm import tqdm
-
 from mhciipresentation.constants import RAW_PUBLIC_FILE_COL_NAMES
 from mhciipresentation.errors import FormatError
 from mhciipresentation.paths import (
@@ -27,6 +25,10 @@ from mhciipresentation.paths import (
     RAW_DATA,
     SPLITS_DIR,
 )
+from scipy import sparse
+from tqdm import tqdm
+
+logger = logging.getLogger(__name__)
 
 
 def load_pseudosequences() -> pd.DataFrame:
@@ -294,8 +296,8 @@ def load_uniprot() -> pd.DataFrame:
                     sequence_version = parsed[6]
                 else:
                     raise FormatError(
-                        "There is a problem with the source file used to store "
-                        "UNIPROT data"
+                        "There is a problem with the source file used to store"
+                        " UNIPROT data"
                     )
                 uniprot = pd.concat(
                     [

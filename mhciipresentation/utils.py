@@ -20,6 +20,7 @@ from typing import Dict, Iterator, List, Optional, Tuple
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
+import pytorch_lightning as pl
 import torch
 from Bio import SeqIO
 from Bio.Seq import Seq
@@ -75,13 +76,14 @@ def get_accelerator(debug=False, n_devices=1, use_mps=False, use_cuda=False):
     if use_mps and not torch.backends.mps.is_available() and not debug:
         if not torch.backends.mps.is_built():
             logger.warning(
-                "MPS not available because the current PyTorch install was not "
-                "built with MPS enabled."
+                "MPS not available because the current PyTorch install was not"
+                " built with MPS enabled."
             )
         else:
             logger.warning(
-                "MPS not available because the current MacOS version is not 12.3+ "
-                "and/or you do not have an MPS-enabled device on this machine."
+                "MPS not available because the current MacOS version is not"
+                " 12.3+ and/or you do not have an MPS-enabled device on this"
+                " machine."
             )
         if debug:
             logger.info(
@@ -90,7 +92,8 @@ def get_accelerator(debug=False, n_devices=1, use_mps=False, use_cuda=False):
             device = torch.device("cpu")
         else:
             logging.info(
-                "Using MPS because debug mode is disabled and MPS is available."
+                "Using MPS because debug mode is disabled and MPS is"
+                " available."
             )
             device = torch.device("mps")
     elif (
@@ -100,8 +103,8 @@ def get_accelerator(debug=False, n_devices=1, use_mps=False, use_cuda=False):
         and n_devices == 1
     ):
         logging.info(
-            "Using CUDA (single GPU) because debug mode is disabled and CUDA is"
-            " available."
+            "Using CUDA (single GPU) because debug mode is disabled and CUDA"
+            " is available."
         )
         device = torch.device("cuda:0")
     elif (
@@ -111,14 +114,14 @@ def get_accelerator(debug=False, n_devices=1, use_mps=False, use_cuda=False):
         and n_devices > 1
     ):
         logging.info(
-            "Using CUDA (multiple GPU) because debug mode is disabled and CUDA is"
-            " available."
+            "Using CUDA (multiple GPU) because debug mode is disabled and CUDA"
+            " is available."
         )
         device = torch.device("cuda")
     else:
         logging.info(
-            "Using CPU because debug mode is enabled or CUDA is not available or MPS is"
-            " not available."
+            "Using CPU because debug mode is enabled or CUDA is not available"
+            " or MPS is not available."
         )
         device = torch.device("cpu")
 
@@ -258,7 +261,7 @@ def aa_seq_to_int(s: str, aa_to_int: dict) -> List[int]:
     # Make sure only valid aa's are passed
     if not set(s).issubset(set(aa_to_int.keys())):
         raise ValueError(
-            f"Unsupported character(s) in sequence found:"
+            "Unsupported character(s) in sequence found:"
             f" {set(s).difference(set(aa_to_int.keys()))}"
         )
     return (
@@ -418,16 +421,6 @@ def prepare_batch(
     )
 
 
-def set_seeds() -> None:
-    """Sets the seeds for most of the packages used in this repository"""
-    SEED = 42
-    random.seed(SEED)
-    np.random.seed(SEED)
-    torch.manual_seed(SEED)
-    torch.cuda.manual_seed(SEED)
-    backends.cudnn.deterministic = True
-
-
 def set_pandas_options() -> None:
     """Sets appropriate values for debugging."""
     pd.options.display.max_colwidth = 150
@@ -541,15 +534,15 @@ def oh_encode(
             values
     """
     encoded_mhcii = encode_mhcii(fcontent)
-    print(f"Encoded MHCII is of shape {encoded_mhcii.shape}")
+    logger.info(f"Encoded MHCII is of shape {encoded_mhcii.shape}")
     encoded_peptide = encode_peptide(fcontent)
-    print(f"Encoded peptide is of shape {encoded_peptide.shape}")
+    logger.info(f"Encoded peptide is of shape {encoded_peptide.shape}")
     encoded_context = encode_context(fcontent)
-    print(f"Encoded context is of shape {encoded_context.shape}")
+    logger.info(f"Encoded context is of shape {encoded_context.shape}")
     encoded_fcontent = sparse.csr_matrix(
         np.hstack([encoded_mhcii, encoded_peptide, encoded_context])
     )
-    print(f"Final encoded object is of shape {encoded_fcontent.shape}")
+    logger.info(f"Final encoded object is of shape {encoded_fcontent.shape}")
     return encoded_fcontent, fcontent.target_value
 
 
@@ -615,7 +608,7 @@ def generate_negative_peptides(white_space: List, bounds: Tuple) -> pd.Series:
     """
     neg_peptides = list()
     # We loop through the length of ranges + 3 amino acids because of the PFRs
-    print("Generating negative peptides.")
+    logger.info("Generating negative peptides.")
     # We have to extend the range to bounds[1] + 4 due to range up to n-1.
     for length in tqdm(range(bounds[0], bounds[1] + 1)):
         for peptide in white_space:
@@ -638,7 +631,7 @@ def get_white_space(peptides: pd.Series, proteins: pd.Series) -> List:
             contain regions that are presented
     """
     white_space = list()
-    print("Generating white space")
+    logger.info("Generating white space")
     for peptide in tqdm(peptides.tolist()):
         proteins_containing_peptide = proteins.loc[
             proteins.str.contains(peptide)
@@ -691,7 +684,7 @@ def get_n_trainable_params(model: torch.nn.Module):
         model (torch.nn.Module): model from which to extract parameters
     """
     pytorch_total_params = sum(p.numel() for p in model.parameters())
-    print("Parameters in Millions: ", pytorch_total_params / 1e6)
+    logger.info("Parameters in Millions: ", pytorch_total_params / 1e6)
 
 
 def load_model_weights(
@@ -843,12 +836,14 @@ def sample_peptides(hs_uniprot_str: str, peptide_length: int, n: int) -> List:
         peptide_candidate = hs_uniprot_str[start : start + peptide_length]
         if "|" not in peptide_candidate:
             peptides.append(peptide_candidate)
-        print(
-            f"Sampling peptides from SwissProt space {(len(peptides)/n)*100}"
-            "% complete.",
+        logger.info(
+            (
+                "Sampling peptides from SwissProt space"
+                f" {(len(peptides)/n)*100}% complete."
+            ),
             end="\r",
         )
-    print("")
+    logger.info("")
     return peptides
 
 

@@ -18,14 +18,15 @@ import warnings
 from datetime import datetime
 from pathlib import Path
 from timeit import default_timer as timer
-from typing import Dict, Tuple
+from typing import Dict, Optional, Tuple
 
 import hydra
 import numpy as np
-import OmegaConf
+import omegaconf
 import pandas as pd
 import pytorch_lightning as pl
 import torch
+import torchmetrics
 from Bio.SeqIO.FastaIO import SimpleFastaParser
 from mhciipresentation.constants import (
     AA_TO_INT,
@@ -75,6 +76,7 @@ from torch import nn
 from torch.optim import Adam
 from torch.optim.lr_scheduler import ExponentialLR
 from torch.utils.data import DataLoader, TensorDataset
+from torchmetrics.classification import BinaryAccuracy
 from tqdm import tqdm
 
 cfg: DictConfig
@@ -82,16 +84,42 @@ cfg: DictConfig
 logger = logging.getLogger(__name__)
 
 
-def build_metrics(device):
+def build_metrics():
     return {
-        "mae": torchmetrics.MeanAbsoluteError().to(device),
-        "mse": torchmetrics.MeanSquaredError().to(device),
+        "accuracy": BinaryAccuracy(threshold=0.5),
+        # "auroc": torchmetrics.AUROC(task="binary"),
+        # "roc": torchmetrics.ROC(task="binary"),
+        "precision": torchmetrics.Precision(task="binary"),
+        "recall": torchmetrics.Recall(task="binary"),
+        "f1": torchmetrics.F1Score(task="binary"),
+        # "precision_recall_curve": torchmetrics.PrecisionRecallCurve(
+        #     task="binary"
+        # ),
+        # "confusion_matrix": torchmetrics.ConfusionMatrix(task="binary"),
+        "matthews": torchmetrics.MatthewsCorrCoef(task="binary"),
+        "cohen": torchmetrics.CohenKappa(task="binary"),
     }
 
 
 def get_hydra_logging_directory() -> Path:
     hydra_cfg = hydra.core.hydra_config.HydraConfig.get()  # type: ignore
     return Path(hydra_cfg["runtime"]["output_dir"])  # type: ignore
+
+
+def pad_sequences(
+    features: np.ndarray,
+    pad_width: int,
+) -> torch.Tensor:
+    # Right padding
+    seq_padded = [
+        np.pad(
+            seq,
+            pad_width=(0, pad_width - len(seq)),
+            constant_values=AA_TO_INT["X"],
+        )
+        for seq in tqdm(features)
+    ]
+    return torch.tensor(np.array(seq_padded, dtype=int))
 
 
 def evaluate_transformer(
@@ -154,9 +182,8 @@ def evaluate_transformer(
     )
     metrics = compute_performance_measures(y_pred, y)
     metrics["loss"] = loss.item()
-    print(f"Metrics for {dataset_type}")
-    pp = pprint.PrettyPrinter(indent=4)
-    pp.pprint(metrics)
+    logger.info(f"Metrics for {dataset_type}")
+
     return metrics  # type: ignore
 
 
@@ -234,17 +261,17 @@ def prepare_iedb_data() -> Tuple[
     np.ndarray,
     np.ndarray,
 ]:
-    cache_file = Path("./.cache/sa_data_ready_for_modelling.csv")
+    cache_file = Path(here() / "data/.cache/sa_data_ready_for_modelling.csv")
     if not cache_file.is_file():
-        print("Loading Data")
+        logger.info("Loading Data")
         sa_data = load_iedb_data()
 
-        print("Adding peptide context")
+        logger.info("Adding peptide context")
         sa_data["peptide_with_context"] = add_peptide_context(
             sa_data["peptide"], sa_data["peptide_context"]
         )
 
-        print("Adding pseudosequence to peptide with context")
+        logger.info("Adding pseudosequence to peptide with context")
         sa_data[
             "peptide_with_context_and_mhcii_pseudosequence"
         ] = join_peptide_with_pseudosequence(
@@ -260,7 +287,7 @@ def prepare_iedb_data() -> Tuple[
         )
         sa_data.to_csv(cache_file)
     else:
-        print("Loading cached data.")
+        logger.info("Loading cached data.")
         sa_data = pd.read_csv(cache_file, index_col=0)
 
     X_train_idx_iedb, X_val_idx_iedb, X_test_idx_iedb = load_iedb_idx()
@@ -403,11 +430,12 @@ def select_features(X_train, X_val, X_test):
 
 
 def train_model(
-    device, model, train_loader, val_loader, test_loader, save_name="aegis"
+    model, device, train_loader, val_loader, test_loader, save_name="aegis"
 ):
     save_path = Path(os.getcwd()) / cfg.paths.checkpoints / save_name
     logger.info(
-        f"Training with the following config:\n{OmegaConf.to_yaml(cfg)}"
+        "Training with the following"
+        f" config:\n{omegaconf.omegaconf.OmegaConf.to_yaml(cfg)}"
     )
     logger.info(f"Saving model in {save_path}")
     logger.info(f"Creating TensorBoard Logger")
@@ -417,6 +445,9 @@ def train_model(
     )
     csv_logger = pl_loggers.CSVLogger(
         save_dir=get_hydra_logging_directory() / "csv", name=save_name
+    )
+    wandb_logger = pl_loggers.WandbLogger(
+        save_dir=get_hydra_logging_directory() / "wandb", name=save_name
     )
     if device.type == "mps":
         accelerator = "mps"
@@ -444,9 +475,10 @@ def train_model(
                 RichProgressBar(leave=True),
                 RichModelSummary(),
             ],
-            logger=[tb_logger, csv_logger],
+            logger=[tb_logger, csv_logger, wandb_logger],
             log_every_n_steps=1,
         )
+        wandb_logger.watch(model, log="all", log_freq=4)
     logger.info(f"Total number of parameters: {count_parameters(model)}")
     logger.info(f"Testing model on validation and test set.")
     val_result = trainer.test(
@@ -467,10 +499,9 @@ def train_model(
 )
 def main(aegiscfg: DictConfig):
     """Main function to train the transformer on the iedb data and sa dataset"""
-    global aegiscfg
+    global cfg
     cfg = aegiscfg
 
-    torch.manual_seed(cfg.seed.seed)
     device = setup_training_env(
         cfg.debug.debug,
         cfg.seed.seed,
@@ -479,12 +510,10 @@ def main(aegiscfg: DictConfig):
         cfg.compute.cuda,
     )
 
-    set_seeds()
+    set_seeds(cfg.seed.seed)
     X_train, X_val, X_test, y_train, y_val, y_test = prepare_data()
     X_train, X_val, X_test = select_features(X_train, X_val, X_test)
-    longest_input = max(
-        [X_train.map(len).max(), X_val.map(len).max(), X_test.map(len).max()]
-    )
+
     X_train = encode_aa_sequences(
         X_train,
         AA_TO_INT,
@@ -493,15 +522,43 @@ def main(aegiscfg: DictConfig):
         X_val,
         AA_TO_INT,
     )
+    X_test = encode_aa_sequences(
+        X_test,
+        AA_TO_INT,
+    )
+
+    input_dim = (
+        33 + 2 if cfg.dataset.feature_set == "seq_only" else 33 + 2 + 34
+    )  # size of longest sequence (33, from NOD mice + start/stop)
+    if cfg.debug.debug:
+        X_train = X_train[: cfg.debug.n_samples_debug]
+        X_val = X_val[: cfg.debug.n_samples_debug]
+        X_test = X_test[: cfg.debug.n_samples_debug]
+        y_train = y_train[: cfg.debug.n_samples_debug]
+        y_val = y_val[: cfg.debug.n_samples_debug]
+        y_test = y_test[: cfg.debug.n_samples_debug]
+
+    X_train = pad_sequences(X_train, input_dim)
+    X_val = pad_sequences(X_val, input_dim)
+    X_test = pad_sequences(X_test, input_dim)
 
     X_train, y_train = shuffle_features_and_labels(X_train, y_train)
 
+    # Transform labels to tensors
+    y_train = torch.tensor(y_train, dtype=torch.float32)
+    y_val = torch.tensor(y_val, dtype=torch.float32)
+    y_test = torch.tensor(y_test, dtype=torch.float32)
+
     TrainingDataset = TensorDataset(X_train, y_train)
-    train_loader = DataLoader(TrainingDataset)
+    train_loader = DataLoader(
+        TrainingDataset, shuffle=True, batch_size=cfg.training.batch_size
+    )
     ValidationDataset = TensorDataset(X_val, y_val)
-    val_loader = DataLoader(ValidationDataset)
+    val_loader = DataLoader(
+        ValidationDataset, batch_size=cfg.training.batch_size
+    )
     TestDataset = TensorDataset(X_test, y_test)
-    test_loader = DataLoader(TestDataset)
+    test_loader = DataLoader(TestDataset, batch_size=cfg.training.batch_size)
 
     max_len = 5000
     batch_size = max_len * torch.cuda.device_count()
@@ -510,9 +567,7 @@ def main(aegiscfg: DictConfig):
 
     lr = float(1e-5)
     patience = 10
-    input_dim = (
-        33 + 2 if cfg.dataset.feature_set == "seq_only" else 33 + 2 + 34
-    )  # size of longest sequence (33, from NOD mice + start/stop)
+
     n_tokens = len(list(AA_TO_INT.values()))
     embedding_size = 128  # embedding dimension
     enc_ff_hidden = 64  # dimension of the feedforward nn model in the encoder
@@ -521,21 +576,24 @@ def main(aegiscfg: DictConfig):
     n_attn_heads = 2  # number of heads in nn.MultiheadAttention
     dropout = 0.3  # dropout probability
     device = torch.device("cuda" if USE_GPU else "cpu")  # training device
-
-    print("Instantiating model")
+    metrics = build_metrics()
+    logger.info("Instantiating model")
     model = TransformerModel(
-        input_dim,
-        n_tokens,
-        embedding_size,
-        n_attn_heads,
-        enc_ff_hidden,
-        ff_hidden,
-        nlayers,
-        dropout,
-        max_len,
-        cfg.training.learning_rate.start_learning_rate,
-        cfg.training.optimizer.weight_decay,
-        max_len,
+        seq_len=input_dim,
+        n_tokens=n_tokens,
+        embedding_size=embedding_size,
+        n_attn_heads=n_attn_heads,
+        enc_ff_hidden=enc_ff_hidden,
+        ff_hidden=ff_hidden,
+        n_layers=nlayers,
+        dropout=dropout,
+        max_len=max_len,
+        pad_num=AA_TO_INT["X"],
+        batch_size=cfg.training.batch_size,
+        start_learning_rate=cfg.training.learning_rate.start_learning_rate,
+        weight_decay=cfg.training.optimizer.weight_decay,
+        loss_fn=nn.BCELoss(),
+        metrics=metrics,
     )
 
     # # try:
@@ -566,7 +624,7 @@ def main(aegiscfg: DictConfig):
         train_loader,
         val_loader,
         test_loader,
-        "graph_transformer",
+        "transformer",
     )
     toc = timer()
     logger.info(f"Training end time is {toc}")
@@ -584,13 +642,13 @@ def main(aegiscfg: DictConfig):
     # best_recall = -1
     # best_precision = -1
     # no_progress = 0
-    # print(f"Features: {cfg.dataset.feature_set}")
-    # print(f"Data Sources: {cfg.dataset.data_source}")
-    # print("batch size: %s" % batch_size)
-    # print("# training data points: %i" % len(X_train))
-    # print("# labels == 0: %i" % sum(y_train == 0))
-    # print("# labels != 0: %i" % sum(y_train != 0))
-    # print("Starting training")
+    # logger.info(f"Features: {cfg.dataset.feature_set}")
+    # logger.info(f"Data Sources: {cfg.dataset.data_source}")
+    # logger.info("batch size: %s" % batch_size)
+    # logger.info("# training data points: %i" % len(X_train))
+    # logger.info("# labels == 0: %i" % sum(y_train == 0))
+    # logger.info("# labels != 0: %i" % sum(y_train != 0))
+    # logger.info("Starting training")
     # for epoch in range(1, epochs + 1):
     #     epoch_start_time = time.time()
     #     avg_epoch_loss = train(
@@ -604,12 +662,12 @@ def main(aegiscfg: DictConfig):
     #         input_dim,
     #     )
     #     elapsed = time.time() - epoch_start_time
-    #     print(
+    #     logger.info(
     #         f"EPOCH NO: {epoch} took {elapsed} seconds with average loss "
     #         f"{avg_epoch_loss}"
     #     )
     #     model.eval()
-    #     print("Evaluating model on training and validation set")
+    #     logger.info("Evaluating model on training and validation set")
     #     with torch.no_grad():
 
     #         train_metrics = evaluate_transformer(
@@ -652,7 +710,7 @@ def main(aegiscfg: DictConfig):
     #     if epoch % 10 == 0:
     #         scheduler.step()
 
-    #     print("Performance data handling")
+    #     logger.info("Performance data handling")
     #     current_matthews = epoch_metrics["val"]["matthews_corrcoef"]
     #     current_recall = epoch_metrics["val"]["recall"]
     #     current_precision = epoch_metrics["val"]["precision"]
@@ -666,25 +724,25 @@ def main(aegiscfg: DictConfig):
     #         checkpoint_fname = checkpoint_dir / (
     #             checkpoint_basename + "_best_matthews"
     #         )
-    #         print("Saving best MCC model")
+    #         logger.info("Saving best MCC model")
 
     #     if current_recall > best_recall:
     #         best_recall = current_recall
     #         checkpoint_fname = checkpoint_dir / (
     #             checkpoint_basename + "_best_recall"
     #         )
-    #         print("Saving best recall model")
+    #         logger.info("Saving best recall model")
 
     #     if current_precision > best_precision:
     #         best_precision = current_precision
     #         checkpoint_fname = checkpoint_dir / (
     #             checkpoint_basename + "_best_precision"
     #         )
-    #         print("Saving best precision model")
+    #         logger.info("Saving best precision model")
 
     #     if current_loss < best_loss:
     #         best_loss = current_loss
-    #         print("Saving best loss model")
+    #         logger.info("Saving best loss model")
 
     #         no_progress = 0
     #     else:
@@ -693,7 +751,7 @@ def main(aegiscfg: DictConfig):
     #     if "best" in str(checkpoint_fname):
     #         save_model(model, str(checkpoint_fname.with_suffix(".pth")))
 
-    #     print("Saving epoch metrics")
+    #     logger.info("Saving epoch metrics")
     #     with open(log_dir / f"metrics/epoch_{epoch}.json", "w") as outfile:
     #         json.dump(epoch_metrics, outfile)
 
@@ -701,7 +759,7 @@ def main(aegiscfg: DictConfig):
     #         # Early stopping
     #         break
 
-    # print("Training terminated.")
+    # logger.info("Training terminated.")
 
 
 if __name__ == "__main__":
