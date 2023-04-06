@@ -1,6 +1,7 @@
 # Custom directories
 data/
 logs/
+outputs/
 
 ### macOS ###
 # General
