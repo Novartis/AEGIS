@@ -79,6 +79,8 @@ from torch.utils.data import DataLoader, TensorDataset
 from torchmetrics.classification import BinaryAccuracy
 from tqdm import tqdm
 
+warnings.filterwarnings("ignore")
+
 cfg: DictConfig
 
 logger = logging.getLogger(__name__)
@@ -88,16 +90,16 @@ def build_metrics():
     return {
         "accuracy": BinaryAccuracy(threshold=0.5),
         # "auroc": torchmetrics.AUROC(task="binary"),
-        # "roc": torchmetrics.ROC(task="binary"),
         "precision": torchmetrics.Precision(task="binary"),
         "recall": torchmetrics.Recall(task="binary"),
         "f1": torchmetrics.F1Score(task="binary"),
+        "matthews": torchmetrics.MatthewsCorrCoef(task="binary"),
+        "cohen": torchmetrics.CohenKappa(task="binary"),
+        # "roc": torchmetrics.ROC(task="binary"),
         # "precision_recall_curve": torchmetrics.PrecisionRecallCurve(
         #     task="binary"
         # ),
         # "confusion_matrix": torchmetrics.ConfusionMatrix(task="binary"),
-        "matthews": torchmetrics.MatthewsCorrCoef(task="binary"),
-        "cohen": torchmetrics.CohenKappa(task="binary"),
     }
 
 
@@ -212,7 +214,7 @@ def train(
         pad_width (int): width of the padding used to make sure all input
             sequences are of the same length
 
-    Returns:
+    Returns
         float: epoch loss
     """
     model_cuda = model.cuda(device) if USE_GPU else model
@@ -253,14 +255,16 @@ def train(
     return sum(epoch_loss) / len(epoch_loss)
 
 
-def prepare_iedb_data() -> Tuple[
-    pd.DataFrame,
-    pd.DataFrame,
-    pd.DataFrame,
-    np.ndarray,
-    np.ndarray,
-    np.ndarray,
-]:
+def prepare_iedb_data() -> (
+    Tuple[
+        pd.DataFrame,
+        pd.DataFrame,
+        pd.DataFrame,
+        np.ndarray,
+        np.ndarray,
+        np.ndarray,
+    ]
+):
     cache_file = Path(here() / "data/.cache/sa_data_ready_for_modelling.csv")
     if not cache_file.is_file():
         logger.info("Loading Data")
@@ -311,7 +315,6 @@ def prepare_iedb_data() -> Tuple[
 
 
 def prepare_nod_data():
-
     nod_data = load_nod_data()
     X_train_idx_nod, X_val_idx_nod, X_test_idx_nod = load_nod_idx()
     X_train_nod = nod_data.iloc[X_train_idx_nod["index"]].rename(
@@ -446,9 +449,9 @@ def train_model(
     csv_logger = pl_loggers.CSVLogger(
         save_dir=get_hydra_logging_directory() / "csv", name=save_name
     )
-    wandb_logger = pl_loggers.WandbLogger(
-        save_dir=get_hydra_logging_directory() / "wandb", name=save_name
-    )
+    # wandb_logger = pl_loggers.WandbLogger(
+    #     save_dir=get_hydra_logging_directory(), name=save_name
+    # )
     if device.type == "mps":
         accelerator = "mps"
     elif device.type == "cuda":
@@ -459,29 +462,32 @@ def train_model(
         raise ValueError("Unknown Pytorch Lightning Accelerator")
     logger.info(f"Set pytorch lightning accelerator as {accelerator}")
     logger.info(f"Instantiating Trainer")
-    with warnings.catch_warnings():
-        warnings.simplefilter("ignore", UserWarning)
-        trainer = pl.Trainer(
-            default_root_dir=save_path,
-            accelerator=device.type,
-            devices=cfg.compute.n_gpu,
-            num_nodes=cfg.compute.num_nodes,
-            max_epochs=cfg.training.epochs,
-            callbacks=[
-                ModelCheckpoint(
-                    save_weights_only=True, mode="max", monitor="val_loss"
-                ),
-                LearningRateMonitor("epoch", log_momentum=cfg.debug.verbose),
-                RichProgressBar(leave=True),
-                RichModelSummary(),
-            ],
-            logger=[tb_logger, csv_logger, wandb_logger],
-            log_every_n_steps=1,
-        )
-        wandb_logger.watch(model, log="all", log_freq=4)
+
+    trainer = pl.Trainer(
+        default_root_dir=save_path,
+        accelerator=device.type,
+        devices=cfg.compute.n_gpu,
+        num_nodes=cfg.compute.num_nodes,
+        max_epochs=cfg.training.epochs,
+        callbacks=[
+            ModelCheckpoint(
+                save_weights_only=True, mode="max", monitor="val_loss"
+            ),
+            LearningRateMonitor("epoch", log_momentum=cfg.debug.verbose),
+            RichProgressBar(leave=True),
+            RichModelSummary(),
+        ],
+        logger=[tb_logger, csv_logger],
+        log_every_n_steps=1,
+    )
+    # wandb_logger.watch(model, log="all", log_freq=4)
+
+    trainer.fit(model, train_loader, val_loader)
+
     logger.info(f"Total number of parameters: {count_parameters(model)}")
     logger.info(f"Testing model on validation and test set.")
-    val_result = trainer.test(
+
+    val_result = trainer.validate(
         model, dataloaders=val_loader, verbose=cfg.debug.verbose
     )
     test_result = trainer.test(
@@ -509,6 +515,8 @@ def main(aegiscfg: DictConfig):
         cfg.compute.mps,
         cfg.compute.cuda,
     )
+
+    torch.set_num_threads(cfg.compute.n_cpu)
 
     set_seeds(cfg.seed.seed)
     X_train, X_val, X_test, y_train, y_val, y_test = prepare_data()
@@ -551,43 +559,37 @@ def main(aegiscfg: DictConfig):
 
     TrainingDataset = TensorDataset(X_train, y_train)
     train_loader = DataLoader(
-        TrainingDataset, shuffle=True, batch_size=cfg.training.batch_size
+        TrainingDataset,
+        shuffle=True,
+        batch_size=cfg.training.batch_size,
+        num_workers=cfg.compute.n_cpu,
     )
     ValidationDataset = TensorDataset(X_val, y_val)
     val_loader = DataLoader(
-        ValidationDataset, batch_size=cfg.training.batch_size
+        ValidationDataset,
+        batch_size=cfg.training.batch_size,
+        num_workers=cfg.compute.n_cpu,
     )
     TestDataset = TensorDataset(X_test, y_test)
-    test_loader = DataLoader(TestDataset, batch_size=cfg.training.batch_size)
-
-    max_len = 5000
-    batch_size = max_len * torch.cuda.device_count()
-    epochs = 500
-    criterion = nn.BCELoss()
-
-    lr = float(1e-5)
-    patience = 10
+    test_loader = DataLoader(
+        TestDataset,
+        batch_size=cfg.training.batch_size,
+        num_workers=cfg.compute.n_cpu,
+    )
 
     n_tokens = len(list(AA_TO_INT.values()))
-    embedding_size = 128  # embedding dimension
-    enc_ff_hidden = 64  # dimension of the feedforward nn model in the encoder
-    ff_hidden = 1024  # dimension of the last feedforward network
-    nlayers = 4  # number of nn.TransformerEncoderLayer
-    n_attn_heads = 2  # number of heads in nn.MultiheadAttention
-    dropout = 0.3  # dropout probability
     device = torch.device("cuda" if USE_GPU else "cpu")  # training device
     metrics = build_metrics()
     logger.info("Instantiating model")
     model = TransformerModel(
         seq_len=input_dim,
         n_tokens=n_tokens,
-        embedding_size=embedding_size,
-        n_attn_heads=n_attn_heads,
-        enc_ff_hidden=enc_ff_hidden,
-        ff_hidden=ff_hidden,
-        n_layers=nlayers,
-        dropout=dropout,
-        max_len=max_len,
+        embedding_size=cfg.model.aegis.embedding_size,
+        n_attn_heads=cfg.model.aegis.n_attn_heads,
+        enc_ff_hidden=cfg.model.aegis.enc_ff_hidden,
+        ff_hidden=cfg.model.aegis.ff_hidden,
+        n_layers=cfg.model.aegis.n_layers,
+        dropout=cfg.model.aegis.dropout,
         pad_num=AA_TO_INT["X"],
         batch_size=cfg.training.batch_size,
         start_learning_rate=cfg.training.learning_rate.start_learning_rate,
@@ -595,25 +597,6 @@ def main(aegiscfg: DictConfig):
         loss_fn=nn.BCELoss(),
         metrics=metrics,
     )
-
-    # # try:
-    # model = model.to(device) if USE_GPU else model
-    # optimizer = Adam(model.parameters(), lr=lr)
-    # scheduler = ExponentialLR(optimizer, gamma=0.9)
-
-    training_params = {
-        "start_lr": str(lr),
-        "patience": str(patience),
-        "input_dim": str(input_dim),
-        "n_tokens": str(n_tokens),
-        "embedding_size": str(embedding_size),
-        "n_attn_heads": str(n_attn_heads),
-        "enc_ff_hidden": str(enc_ff_hidden),
-        "ff_hidden": str(ff_hidden),
-        "nlayers": str(nlayers),
-        "dropout": str(dropout),
-        "max_len": str(max_len),
-    }
 
     tic = timer()
     logger.info(f"Training start time is {tic}")
@@ -630,136 +613,6 @@ def main(aegiscfg: DictConfig):
     logger.info(f"Training end time is {toc}")
     total_time = toc - tic
     logger.info(f"Total training time is {total_time}")
-
-    #######
-
-    # if USE_SUBSET:
-    #     X_train = X_train[:10000]
-    #     y_train = y_train[:10000]
-
-    # best_loss = 10000
-    # best_matthews = -1
-    # best_recall = -1
-    # best_precision = -1
-    # no_progress = 0
-    # logger.info(f"Features: {cfg.dataset.feature_set}")
-    # logger.info(f"Data Sources: {cfg.dataset.data_source}")
-    # logger.info("batch size: %s" % batch_size)
-    # logger.info("# training data points: %i" % len(X_train))
-    # logger.info("# labels == 0: %i" % sum(y_train == 0))
-    # logger.info("# labels != 0: %i" % sum(y_train != 0))
-    # logger.info("Starting training")
-    # for epoch in range(1, epochs + 1):
-    #     epoch_start_time = time.time()
-    #     avg_epoch_loss = train(
-    #         model,
-    #         X_train,
-    #         y_train,
-    #         batch_size,
-    #         criterion,
-    #         optimizer,
-    #         device,
-    #         input_dim,
-    #     )
-    #     elapsed = time.time() - epoch_start_time
-    #     logger.info(
-    #         f"EPOCH NO: {epoch} took {elapsed} seconds with average loss "
-    #         f"{avg_epoch_loss}"
-    #     )
-    #     model.eval()
-    #     logger.info("Evaluating model on training and validation set")
-    #     with torch.no_grad():
-
-    #         train_metrics = evaluate_transformer(
-    #             X_train,
-    #             y_train,
-    #             batch_size,
-    #             device,
-    #             model,
-    #             "train",
-    #             input_dim,
-    #             AA_TO_INT["X"],
-    #             criterion,
-    #         )
-    #         if USE_SUBSET:
-    #             val_metrics = evaluate_transformer(
-    #                 X_val[:5000],
-    #                 y_val[:5000],
-    #                 batch_size,
-    #                 device,
-    #                 model,
-    #                 "val",
-    #                 input_dim,
-    #                 AA_TO_INT["X"],
-    #                 criterion,
-    #             )
-    #         else:
-    #             val_metrics = evaluate_transformer(
-    #                 X_val,
-    #                 y_val,
-    #                 batch_size,
-    #                 device,
-    #                 model,
-    #                 "val",
-    #                 input_dim,
-    #                 AA_TO_INT["X"],
-    #                 criterion,
-    #             )
-    #         epoch_metrics = {"train": train_metrics, "val": val_metrics}
-
-    #     if epoch % 10 == 0:
-    #         scheduler.step()
-
-    #     logger.info("Performance data handling")
-    #     current_matthews = epoch_metrics["val"]["matthews_corrcoef"]
-    #     current_recall = epoch_metrics["val"]["recall"]
-    #     current_precision = epoch_metrics["val"]["precision"]
-    #     current_loss = epoch_metrics["val"]["loss"]
-
-    #     checkpoint_dir = log_dir / "checkpoints"
-    #     checkpoint_basename = f"checkpoint_epoch_{epoch}"
-    #     checkpoint_fname = checkpoint_dir / checkpoint_basename
-    #     if current_matthews > best_matthews:
-    #         best_matthews = current_matthews
-    #         checkpoint_fname = checkpoint_dir / (
-    #             checkpoint_basename + "_best_matthews"
-    #         )
-    #         logger.info("Saving best MCC model")
-
-    #     if current_recall > best_recall:
-    #         best_recall = current_recall
-    #         checkpoint_fname = checkpoint_dir / (
-    #             checkpoint_basename + "_best_recall"
-    #         )
-    #         logger.info("Saving best recall model")
-
-    #     if current_precision > best_precision:
-    #         best_precision = current_precision
-    #         checkpoint_fname = checkpoint_dir / (
-    #             checkpoint_basename + "_best_precision"
-    #         )
-    #         logger.info("Saving best precision model")
-
-    #     if current_loss < best_loss:
-    #         best_loss = current_loss
-    #         logger.info("Saving best loss model")
-
-    #         no_progress = 0
-    #     else:
-    #         no_progress += 1
-
-    #     if "best" in str(checkpoint_fname):
-    #         save_model(model, str(checkpoint_fname.with_suffix(".pth")))
-
-    #     logger.info("Saving epoch metrics")
-    #     with open(log_dir / f"metrics/epoch_{epoch}.json", "w") as outfile:
-    #         json.dump(epoch_metrics, outfile)
-
-    #     if no_progress == patience:
-    #         # Early stopping
-    #         break
-
-    # logger.info("Training terminated.")
 
 
 if __name__ == "__main__":

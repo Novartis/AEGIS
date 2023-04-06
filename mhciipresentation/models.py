@@ -7,6 +7,7 @@ File defining all protein language models used in this package.
 
 """
 
+import collections
 import math
 from typing import Any, Dict
 
@@ -50,7 +51,6 @@ class TransformerModel(pl.LightningModule):
         dropout: float,
         pad_num: int,
         batch_size: int,
-        max_len: int = 5000,
         start_learning_rate: float = 0.001,
         weight_decay: float = 0.01,
         loss_fn=nn.BCELoss(),
@@ -71,10 +71,17 @@ class TransformerModel(pl.LightningModule):
             dropout (float): dropout for the final feedforward layer
             device (torch.device): device used for computation
         """
+
+        def update_metric_keys(metrics, prefix):
+            metrics_new = metrics.copy()
+            for metric in metrics.keys():
+                metrics_new[f"{prefix}_{metric}"] = metrics_new.pop(metric)
+            return metrics_new
+
         super().__init__()
         self.model_type = "Transformer"
         self.seq_len = seq_len
-        self.pos_encoder = PositionalEncoding(embedding_size, dropout, max_len)
+        self.pos_encoder = PositionalEncoding(embedding_size, dropout, seq_len)
         encoder_layers = TransformerEncoderLayer(
             embedding_size,
             n_attn_heads,
@@ -99,6 +106,14 @@ class TransformerModel(pl.LightningModule):
         self.metrics = metrics
         self.pad_num = pad_num
         self.batch_size = batch_size
+        train_metrics = update_metric_keys(metrics.copy(), prefix="train")
+        val_metrics = update_metric_keys(metrics.copy(), prefix="val")
+        test_metrics = update_metric_keys(metrics.copy(), prefix="test")
+        metrics = {}
+        for d in [train_metrics, val_metrics, test_metrics]:
+            for k, v in d.items():
+                metrics[k] = v
+        self.metrics = metrics
         self.init_weights()
 
     def init_weights(self) -> None:
@@ -164,19 +179,26 @@ class TransformerModel(pl.LightningModule):
             "lr_scheduler": lr_scheduler,
         }
 
-    def evaluate_model(self, y_true, y_pred, prefix):
-        for metric in self.metrics.keys():
+    # def update_metrics(self, y_true, y_pred, prefix):
+    #     for metric in [key for key in self.metrics.keys() if prefix in key]:
+    #         self.metrics[metric].update(y_pred.cpu(), y_true.cpu().int())
+
+    def compute_metrics(self, prefix, y_pred, y_true):
+        for metric in [key for key in self.metrics.keys() if prefix in key]:
+            metric_res = self.metrics[metric](y_pred.cpu(), y_true.cpu().int())
             self.log(
-                f"{prefix}_{metric}",
-                self.metrics[metric].cpu()(y_pred.cpu(), y_true.cpu().int()),
-                batch_size=y_true.shape[0],
+                f"{metric}",
+                metric_res.float(),
                 sync_dist=True,
             )
-        pass
+
+    def reset_metrics(self, prefix):
+        for metric in [key for key in self.metrics.keys() if prefix in key]:
+            self.metrics[metric].reset()
 
     def generate_padding_mask(self, batch):
         src_padding_mask = batch[0] == self.pad_num
-        src_padding_mask = src_padding_mask
+        src_padding_mask = src_padding_mask.bool()
         if self.batch_size != batch[0].size(0):
             src_padding_mask[:, : batch[0].size(0)]
         return src_padding_mask
@@ -193,7 +215,7 @@ class TransformerModel(pl.LightningModule):
                 batch[1].view(-1, 1).double().cpu()
             )
         )
-        self.evaluate_model(y_true, y_hat, "train")
+        self.compute_metrics("train", y_true, y_hat)
         return loss
 
     def validation_step(self, batch, batch_idx):
@@ -208,7 +230,7 @@ class TransformerModel(pl.LightningModule):
                 batch[1].view(-1, 1).double().cpu()
             )
         )
-        self.evaluate_model(y_true, y_hat, "validation")
+        self.compute_metrics("val", y_true, y_hat)
 
     def test_step(self, batch, batch_idx):
         src_padding_mask = self.generate_padding_mask(batch)
@@ -222,4 +244,22 @@ class TransformerModel(pl.LightningModule):
                 batch[1].view(-1, 1).double().cpu()
             )
         )
-        self.evaluate_model(y_true, y_hat, "test")
+        self.compute_metrics("test", y_true, y_hat)
+
+    # def on_train_epoch_end(self):
+    #     # compute metrics
+    #     self.compute_metrics("train")
+    #     # reset all metrics
+    #     self.reset_metrics("train")
+
+    # def on_validation_epoch_end(self):
+    #     # compute metrics
+    #     self.compute_metrics("val")
+    #     # reset all metrics
+    #     self.reset_metrics("val")
+
+    # def on_test_epoch_end(self):
+    #     # compute metrics
+    #     self.compute_metrics("test")
+    #     # reset all metrics
+    #     self.reset_metrics("test")
