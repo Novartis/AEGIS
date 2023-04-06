@@ -1,2 +1,1 @@
 data_source: iedb # can also be nod or iedb_nod
-feature_set: seq_only # can also be seq_mhc

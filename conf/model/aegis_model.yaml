@@ -5,4 +5,5 @@ aegis:
   n_layers: 4
   n_attn_heads: 4
   dropout: 0.3
-  
+
+feature_set: seq_only # can also be seq_mhc
