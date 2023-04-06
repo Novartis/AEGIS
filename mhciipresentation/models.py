@@ -16,7 +16,10 @@ import torch
 import torchmetrics
 from mhciipresentation.constants import AA_TO_INT_PTM, USE_GPU
 from mhciipresentation.layers import FeedForward, PositionalEncoding
-from mhciipresentation.utils import prepare_batch
+from mhciipresentation.utils import (
+    get_cosine_schedule_with_warmup,
+    prepare_batch,
+)
 from sklearn.preprocessing import Binarizer
 from torch import nn
 from torch.autograd import Variable
@@ -167,9 +170,11 @@ class TransformerModel(pl.LightningModule):
         )
 
         lr_scheduler = {
-            "scheduler": ExponentialLR(
-                optimizer, gamma=0.9
-            ),  # TODO: replace with one of those oscillating schedulers
+            "scheduler": get_cosine_schedule_with_warmup(
+                optimizer,
+                self.warmup_steps,
+                max_epochs=self.epochs,
+            ),
             "monitor": "val_loss",
             "interval": "step",
         }

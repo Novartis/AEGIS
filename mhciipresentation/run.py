@@ -1,4 +1,3 @@
-#!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
 """run.py
@@ -74,7 +73,6 @@ from pytorch_lightning.callbacks import (
 from pytorch_lightning.callbacks.progress.rich_progress import RichProgressBar
 from torch import nn
 from torch.optim import Adam
-from torch.optim.lr_scheduler import ExponentialLR
 from torch.utils.data import DataLoader, TensorDataset
 from torchmetrics.classification import BinaryAccuracy
 from tqdm import tqdm
@@ -372,7 +370,14 @@ def prepare_nod_data():
     )
 
 
-def prepare_data() -> Tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
+def prepare_data() -> Tuple[
+    pd.DataFrame,
+    pd.DataFrame,
+    pd.DataFrame,
+    np.ndarray,
+    np.ndarray,
+    np.ndarray,
+]:
     if "iedb" in cfg.dataset.data_source:
         (
             X_train_iedb,
@@ -535,9 +540,16 @@ def main(aegiscfg: DictConfig):
         AA_TO_INT,
     )
 
-    input_dim = (
-        33 + 2 if cfg.dataset.feature_set == "seq_only" else 33 + 2 + 34
-    )  # size of longest sequence (33, from NOD mice + start/stop)
+    if cfg.model.feature_set == "seq_only":
+        input_dim = 33 + 2
+    elif cfg.model.feature_set == "seq_and_mhc":
+        input_dim = 33 + 2 + 34
+    else:
+        raise ValueError(
+            f"Unknown feature set {cfg.dataset.feature_set}. "
+            "Please choose from seq_only or seq_and_mhc"
+        )
+
     if cfg.debug.debug:
         X_train = X_train[: cfg.debug.n_samples_debug]
         X_val = X_val[: cfg.debug.n_samples_debug]
