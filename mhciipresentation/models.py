@@ -16,6 +16,7 @@ import torch
 import torchmetrics
 from mhciipresentation.constants import AA_TO_INT_PTM, USE_GPU
 from mhciipresentation.layers import FeedForward, PositionalEncoding
+from mhciipresentation.scheduler import GradualWarmupScheduler
 from mhciipresentation.utils import (
     get_cosine_schedule_with_warmup,
     prepare_batch,
@@ -25,7 +26,6 @@ from torch import nn
 from torch.autograd import Variable
 from torch.nn import TransformerEncoder, TransformerEncoderLayer
 from torch.nn import functional as F
-from torch.optim.lr_scheduler import ExponentialLR
 from torchmetrics import (
     AUROC,
     ROC,
@@ -171,14 +171,27 @@ class TransformerModel(pl.LightningModule):
             lr=self.start_learning_rate,
             weight_decay=self.weight_decay,
         )
+        cosine_scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
+            optimizer,
+            100,
+            eta_min=self.start_learning_rate,
+            last_epoch=-1,
+            verbose=False,
+        )
 
         lr_scheduler = {
-            "scheduler": torch.optim.lr_scheduler.CyclicLR(
+            # "scheduler": torch.optim.lr_scheduler.CyclicLR(
+            #     optimizer,
+            #     base_lr=self.start_learning_rate,
+            #     max_lr=self.peak_learning_rate,
+            #     step_size_up=5000,
+            #     cycle_momentum=False,
+            # ),
+            "scheduler": GradualWarmupScheduler(
                 optimizer,
-                base_lr=self.start_learning_rate,
-                max_lr=self.peak_learning_rate,
-                step_size_up=5000,
-                cycle_momentum=False,
+                multiplier=2,
+                total_epoch=self.epochs,
+                after_scheduler=cosine_scheduler,
             ),
             "monitor": "val_loss",
             "interval": "step",
