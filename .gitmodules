@@ -1,0 +1,3 @@
+[submodule "baselines/DeepMHCII"]
+	path = baselines/DeepMHCII
+	url = git@github.com:pjhartout/DeepMHCII.git

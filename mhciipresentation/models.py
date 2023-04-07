@@ -16,16 +16,13 @@ import torch
 import torchmetrics
 from mhciipresentation.constants import AA_TO_INT_PTM, USE_GPU
 from mhciipresentation.layers import FeedForward, PositionalEncoding
-from mhciipresentation.utils import (
-    get_cosine_schedule_with_warmup,
-    prepare_batch,
-)
+from mhciipresentation.scheduler import GradualWarmupScheduler
+from mhciipresentation.utils import prepare_batch
 from sklearn.preprocessing import Binarizer
 from torch import nn
 from torch.autograd import Variable
 from torch.nn import TransformerEncoder, TransformerEncoderLayer
 from torch.nn import functional as F
-from torch.optim.lr_scheduler import ExponentialLR
 from torchmetrics import (
     AUROC,
     ROC,
@@ -62,6 +59,7 @@ class TransformerModel(pl.LightningModule):
         loss_fn=nn.BCELoss(),
         scalar_metrics: Dict[str, Any] = {},
         vector_metrics: Dict[str, Any] = {},
+        steps_per_epoch: int = 100,
         n_gpu: int = 1,
         n_cpu: int = 1,
     ):
@@ -138,6 +136,7 @@ class TransformerModel(pl.LightningModule):
         self.n_gpu = n_gpu
         self.n_cpu = n_cpu
         self.peak_learning_rate = peak_learning_rate
+        self.steps_per_epoch = steps_per_epoch
         self.init_weights()
 
     def init_weights(self) -> None:
@@ -171,14 +170,27 @@ class TransformerModel(pl.LightningModule):
             lr=self.start_learning_rate,
             weight_decay=self.weight_decay,
         )
+        cosine_scheduler = torch.optim.lr_scheduler.OneCycleLR(
+            optimizer,
+            max_lr=self.peak_learning_rate,
+            epochs=self.epochs,
+            steps_per_epoch=self.steps_per_epoch,
+            pct_start=0.1,
+        )
 
         lr_scheduler = {
-            "scheduler": torch.optim.lr_scheduler.CyclicLR(
+            # "scheduler": torch.optim.lr_scheduler.CyclicLR(
+            #     optimizer,
+            #     base_lr=self.start_learning_rate,
+            #     max_lr=self.peak_learning_rate,
+            #     step_size_up=5000,
+            #     cycle_momentum=False,
+            # ),
+            "scheduler": GradualWarmupScheduler(
                 optimizer,
-                base_lr=self.start_learning_rate,
-                max_lr=self.peak_learning_rate,
-                step_size_up=5000,
-                cycle_momentum=False,
+                multiplier=2,
+                total_epoch=self.epochs,
+                after_scheduler=cosine_scheduler,
             ),
             "monitor": "val_loss",
             "interval": "step",
@@ -282,7 +294,6 @@ class TransformerModel(pl.LightningModule):
     #     # compute metrics
     #     self.compute_metrics("val")
     #     # reset all metrics
-    #     self.reset_metrics("val")
 
     # def on_test_epoch_end(self):
     #     # compute metrics

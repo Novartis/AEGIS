@@ -922,13 +922,3 @@ def assign_pseudosequences(
         ] = assigned.Pseudosequence
 
     return decoys
-
-
-def get_cosine_schedule_with_warmup(optimizer, warmup_steps, max_epochs):
-    def lr_lambda(step):
-        if step < warmup_steps:
-            return max(1e-06, step / max(1, warmup_steps))
-        progress = (step - warmup_steps) / max(1, max_epochs - warmup_steps)
-        return 0.5 * (1.0 + math.cos(math.pi * progress))
-
-    return torch.optim.lr_scheduler.LambdaLR(optimizer, lr_lambda)

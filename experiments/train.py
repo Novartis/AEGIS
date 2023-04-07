@@ -127,137 +127,6 @@ def pad_sequences(
     return torch.tensor(np.array(seq_padded, dtype=int))
 
 
-def evaluate_transformer(
-    X: np.ndarray,
-    y: np.ndarray,
-    batch_size: int,
-    device: torch.device,
-    model: torch.nn.Module,
-    dataset_type: str,
-    pad_width: int,
-    pad_num: int,
-    criterion: torch.nn.BCELoss,
-) -> Dict:
-    """Evaluates a given dataset
-
-    Args:
-        X (np.ndarray): input data of shape (n_samples, n_features)
-        y (np.ndarray): known labels for samples of shape (n_samples, )
-        batch_size (int): batch size to compute predictions
-        device (torch.device): device on which the training should take place.
-            Can be "cpu", "cuda"...
-        model (torch.nn.Module): model used for evaluation
-        dataset_type (str): string used for logging purposes.
-        pad_width (int): width of the padding used to make sure all input
-            sequences are of the same length
-        pad_num [int]: number to be masked due to padding
-        criterion (torch.nn.BCELoss): loss function
-
-    Returns:
-        Dict: dictionary containing the dataset performance measures.
-    """
-
-    bin_idx = np.where((y == 0.0) | (y == 1.0))[0]
-    y = y[bin_idx]
-    X = X[bin_idx]
-
-    steps = list(range(0, X.shape[0], batch_size))
-    y_pred_batches = list()
-
-    for step in tqdm(steps):
-        X_batch, _ = prepare_batch(step, batch_size, pad_width, pad_num, X, y)
-        X_batch = (
-            X_batch.cuda(device=device, non_blocking=True)
-            if USE_GPU
-            else X_batch
-        )
-        src_padding_mask = X_batch == pad_num
-        src_padding_mask = (
-            src_padding_mask.to(device) if USE_GPU else src_padding_mask
-        )
-        if batch_size != X_batch.size(0):  # only on last batch
-            src_padding_mask[:, : X_batch.size(0)]
-
-        y_pred_batches.append(
-            model(X_batch, src_padding_mask).cpu().detach().numpy()
-        )
-    y_pred = np.vstack(y_pred_batches)
-    loss = criterion(
-        torch.Tensor(y_pred).view(-1, 1), torch.Tensor(y).view(-1, 1)
-    )
-    metrics = compute_performance_measures(y_pred, y)
-    metrics["loss"] = loss.item()
-    logger.info(f"Metrics for {dataset_type}")
-
-    return metrics  # type: ignore
-
-
-def train(
-    model: nn.Module,
-    X_train: np.ndarray,
-    y_train: np.ndarray,
-    batch_size: int,
-    criterion: torch.nn.BCELoss,
-    optimizer: torch.optim.Optimizer,
-    device: torch.device,
-    pad_width: int,
-) -> float:
-    r"""Training function implementing backprop algorithm
-
-    Args:
-        model (nn.Module): model to be trained
-        X_train (np.ndarray): training data of shape (n_samples, n_features)
-        y_train (np.ndarray): training labels of shape (n_samples, )
-        batch_size (int): batch size used for training
-        criterion (torch.nn.BCELoss): loss function
-        optimizer (torch.optim.Optimizer): optimizer algorithm used to update
-            the model parameters
-        device (torch.device): device on which the training should take place.
-            Can be "cpu", "cuda"...
-        pad_width (int): width of the padding used to make sure all input
-            sequences are of the same length
-
-    Returns
-        float: epoch loss
-    """
-    model_cuda = model.cuda(device) if USE_GPU else model
-    model_cuda.train()  # turn on train mode
-    total_loss = 0.0
-    steps = list(range(0, X_train.shape[0], batch_size))
-    epoch_loss = list()
-
-    for step in tqdm(steps):
-        data, targets = prepare_batch(
-            step, batch_size, pad_width, AA_TO_INT["X"], X_train, y_train
-        )
-        data_cuda = (
-            data.cuda(device=device, non_blocking=True) if USE_GPU else data
-        )
-        targets_cuda = (
-            targets.cuda(device=device, non_blocking=True).double()
-            if USE_GPU
-            else targets.double()
-        )
-
-        src_padding_mask = data == AA_TO_INT["X"]
-
-        src_padding_mask = (
-            src_padding_mask.to(device) if USE_GPU else src_padding_mask
-        )
-        if batch_size != data_cuda.size(0):  # only on last batch
-            src_padding_mask = src_padding_mask[:, : data_cuda.size(0)]
-
-        optimizer.zero_grad()
-        output = model_cuda(data_cuda, src_padding_mask)
-        loss = criterion(output, targets_cuda)
-        loss.backward()
-        optimizer.step()
-
-        total_loss += loss.item()
-        epoch_loss.append(loss.item())
-    return sum(epoch_loss) / len(epoch_loss)
-
-
 def prepare_iedb_data() -> (
     Tuple[
         pd.DataFrame,
@@ -330,35 +199,34 @@ def prepare_nod_data():
         columns={"Peptide Sequence": "peptide"}
     )
 
-    if True:
-        pseudosequences = load_pseudosequences()
-        iag7_pseudosequence = pseudosequences.loc[
-            pseudosequences.Name == "H-2-IAg7"
-        ].Pseudosequence.values[0]
-        (
-            X_train_nod["Pseudosequence"],
-            X_val_nod["Pseudosequence"],
-            X_test_nod["Pseudosequence"],
-        ) = (
-            iag7_pseudosequence,
-            iag7_pseudosequence,
-            iag7_pseudosequence,
-        )
-        X_train_nod[
-            "peptide_with_mhcii_pseudosequence"
-        ] = join_peptide_with_pseudosequence(
-            X_train_nod["peptide"], X_train_nod["Pseudosequence"]
-        )
-        X_val_nod[
-            "peptide_with_mhcii_pseudosequence"
-        ] = join_peptide_with_pseudosequence(
-            X_val_nod["peptide"], X_val_nod["Pseudosequence"]
-        )
-        X_test_nod[
-            "peptide_with_mhcii_pseudosequence"
-        ] = join_peptide_with_pseudosequence(
-            X_test_nod["peptide"], X_test_nod["Pseudosequence"]
-        )
+    pseudosequences = load_pseudosequences()
+    iag7_pseudosequence = pseudosequences.loc[
+        pseudosequences.Name == "H-2-IAg7"
+    ].Pseudosequence.values[0]
+    (
+        X_train_nod["Pseudosequence"],
+        X_val_nod["Pseudosequence"],
+        X_test_nod["Pseudosequence"],
+    ) = (
+        iag7_pseudosequence,
+        iag7_pseudosequence,
+        iag7_pseudosequence,
+    )
+    X_train_nod[
+        "peptide_with_mhcii_pseudosequence"
+    ] = join_peptide_with_pseudosequence(
+        X_train_nod["peptide"], X_train_nod["Pseudosequence"]
+    )
+    X_val_nod[
+        "peptide_with_mhcii_pseudosequence"
+    ] = join_peptide_with_pseudosequence(
+        X_val_nod["peptide"], X_val_nod["Pseudosequence"]
+    )
+    X_test_nod[
+        "peptide_with_mhcii_pseudosequence"
+    ] = join_peptide_with_pseudosequence(
+        X_test_nod["peptide"], X_test_nod["Pseudosequence"]
+    )
 
     y_train_nod, y_val_nod, y_test_nod = (
         X_train_nod.label.values,
@@ -375,14 +243,16 @@ def prepare_nod_data():
     )
 
 
-def prepare_data() -> Tuple[
-    pd.DataFrame,
-    pd.DataFrame,
-    pd.DataFrame,
-    np.ndarray,
-    np.ndarray,
-    np.ndarray,
-]:
+def prepare_data() -> (
+    Tuple[
+        pd.DataFrame,
+        pd.DataFrame,
+        pd.DataFrame,
+        np.ndarray,
+        np.ndarray,
+        np.ndarray,
+    ]
+):
     if "iedb" in cfg.dataset.data_source:
         (
             X_train_iedb,
@@ -489,6 +359,7 @@ def train_model(
         ],
         logger=[tb_logger, csv_logger],
         log_every_n_steps=1,
+        benchmark=cfg.debug.benchmark,
     )
     # wandb_logger.watch(model, log="all", log_freq=4)
 
@@ -596,7 +467,6 @@ def main(aegiscfg: DictConfig):
 
     n_tokens = len(list(AA_TO_INT.values()))
     device = torch.device("cuda" if USE_GPU else "cpu")  # training device
-    metrics = 
     logger.info("Instantiating model")
     model = TransformerModel(
         seq_len=input_dim,
@@ -619,8 +489,8 @@ def main(aegiscfg: DictConfig):
         vector_metrics=build_vector_metrics(),
         n_gpu=cfg.compute.n_gpu,
         n_cpu=cfg.compute.n_cpu,
+        steps_per_epoch=len(train_loader),
     )
-
     tic = timer()
     logger.info(f"Training start time is {tic}")
 
