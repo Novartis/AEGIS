@@ -6,10 +6,11 @@
 This file contains a number of utility functions used throughout the project.
 
 """
-
 import copy
+import functools
 import json
 import logging
+import math
 import os
 import random
 from collections import Counter
@@ -837,10 +838,8 @@ def sample_peptides(hs_uniprot_str: str, peptide_length: int, n: int) -> List:
         if "|" not in peptide_candidate:
             peptides.append(peptide_candidate)
         logger.info(
-            (
-                "Sampling peptides from SwissProt space"
-                f" {(len(peptides)/n)*100}% complete."
-            ),
+            "Sampling peptides from SwissProt space"
+            f" {(len(peptides)/n)*100}% complete.",
             end="\r",
         )
     logger.info("")

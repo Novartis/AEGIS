@@ -54,10 +54,16 @@ class TransformerModel(pl.LightningModule):
         dropout: float,
         pad_num: int,
         batch_size: int,
+        warmup_steps: int,
+        epochs: int,
         start_learning_rate: float = 0.001,
+        peak_learning_rate: float = 0.01,
         weight_decay: float = 0.01,
         loss_fn=nn.BCELoss(),
-        metrics: Dict[str, Any] = {},
+        scalar_metrics: Dict[str, Any] = {},
+        vector_metrics: Dict[str, Any] = {},
+        n_gpu: int = 1,
+        n_cpu: int = 1,
     ):
         r"""Initializes TransformerModel, including PositionalEncoding and
             TransformerEncoderLayer
@@ -84,7 +90,7 @@ class TransformerModel(pl.LightningModule):
         super().__init__()
         self.model_type = "Transformer"
         self.seq_len = seq_len
-        self.pos_encoder = PositionalEncoding(embedding_size, dropout, seq_len)
+        self.pos_encoder = PositionalEncoding(embedding_size, dropout, 5000)
         encoder_layers = TransformerEncoderLayer(
             embedding_size,
             n_attn_heads,
@@ -106,17 +112,32 @@ class TransformerModel(pl.LightningModule):
         self.loss_fn = loss_fn
         self.start_learning_rate = start_learning_rate
         self.weight_decay = weight_decay
-        self.metrics = metrics
+        self.scalar_metrics = scalar_metrics
         self.pad_num = pad_num
         self.batch_size = batch_size
-        train_metrics = update_metric_keys(metrics.copy(), prefix="train")
-        val_metrics = update_metric_keys(metrics.copy(), prefix="val")
-        test_metrics = update_metric_keys(metrics.copy(), prefix="test")
+        train_scalar_metrics = update_metric_keys(
+            scalar_metrics.copy(), prefix="train"
+        )
+        val_scalar_metrics = update_metric_keys(
+            scalar_metrics.copy(), prefix="val"
+        )
+        test_scalar_metrics = update_metric_keys(
+            scalar_metrics.copy(), prefix="test"
+        )
         metrics = {}
-        for d in [train_metrics, val_metrics, test_metrics]:
+        for d in [
+            train_scalar_metrics,
+            val_scalar_metrics,
+            test_scalar_metrics,
+        ]:
             for k, v in d.items():
                 metrics[k] = v
-        self.metrics = metrics
+        self.vector_metrics = vector_metrics
+        self.warmup_steps = warmup_steps
+        self.epochs = epochs
+        self.n_gpu = n_gpu
+        self.n_cpu = n_cpu
+        self.peak_learning_rate = peak_learning_rate
         self.init_weights()
 
     def init_weights(self) -> None:
@@ -136,31 +157,13 @@ class TransformerModel(pl.LightningModule):
             torch.Tensor: output of the model
         """
         src = data[0]
-        src, src_padding_mask = self.add_dummy_sample(src, src_padding_mask)
         src = self.embedding(src) * math.sqrt(self.embedding_size)
         src = self.pos_encoder(src)
         src = self.transformer_encoder(
             src, src_key_padding_mask=src_padding_mask
         )
-        output = self.feedforward(src.view(src.size(0), -1))[1:]
+        output = self.feedforward(src.view(src.size(0), -1))
         return output.double()  # type: ignore
-
-    def add_dummy_sample(self, src, src_padding_mask):
-        src_padding_mask = torch.vstack(
-            [
-                torch.full((self.seq_len,), False).to(self.device),
-                src_padding_mask,
-            ]
-        )
-        src = torch.vstack(
-            [
-                torch.full((self.seq_len,), AA_TO_INT_PTM["E"]).to(
-                    self.device
-                ),
-                src,
-            ]
-        )
-        return src, src_padding_mask
 
     def configure_optimizers(self):
         optimizer = torch.optim.AdamW(
@@ -170,10 +173,12 @@ class TransformerModel(pl.LightningModule):
         )
 
         lr_scheduler = {
-            "scheduler": get_cosine_schedule_with_warmup(
+            "scheduler": torch.optim.lr_scheduler.CyclicLR(
                 optimizer,
-                self.warmup_steps,
-                max_epochs=self.epochs,
+                base_lr=self.start_learning_rate,
+                max_lr=self.peak_learning_rate,
+                step_size_up=5000,
+                cycle_momentum=False,
             ),
             "monitor": "val_loss",
             "interval": "step",
@@ -189,21 +194,37 @@ class TransformerModel(pl.LightningModule):
     #         self.metrics[metric].update(y_pred.cpu(), y_true.cpu().int())
 
     def compute_metrics(self, prefix, y_pred, y_true):
-        for metric in [key for key in self.metrics.keys() if prefix in key]:
-            metric_res = self.metrics[metric](y_pred.cpu(), y_true.cpu().int())
+        for metric in [
+            key for key in self.scalar_metrics.keys() if prefix in key
+        ]:
+            metric_res = self.scalar_metrics[metric](
+                y_pred.cpu(), y_true.cpu().int()
+            )
             self.log(
+                f"{metric}",
+                metric_res.float(),
+                sync_dist=True,
+            )
+        for metric in [
+            key for key in self.vector_metrics.keys() if prefix in key
+        ]:
+            metric_res = self.vector_metrics[metric](
+                y_pred.cpu(), y_true.cpu().int()
+            )
+            self.log_dict(
                 f"{metric}",
                 metric_res.float(),
                 sync_dist=True,
             )
 
     def reset_metrics(self, prefix):
-        for metric in [key for key in self.metrics.keys() if prefix in key]:
-            self.metrics[metric].reset()
+        for metric in [
+            key for key in self.scalar_metrics.keys() if prefix in key
+        ]:
+            self.scalar_metrics[metric].reset()
 
     def generate_padding_mask(self, batch):
         src_padding_mask = batch[0] == self.pad_num
-        src_padding_mask = src_padding_mask.bool()
         if self.batch_size != batch[0].size(0):
             src_padding_mask[:, : batch[0].size(0)]
         return src_padding_mask

@@ -84,20 +84,25 @@ cfg: DictConfig
 logger = logging.getLogger(__name__)
 
 
-def build_metrics():
+def build_scalar_metrics():
     return {
         "accuracy": BinaryAccuracy(threshold=0.5),
-        # "auroc": torchmetrics.AUROC(task="binary"),
         "precision": torchmetrics.Precision(task="binary"),
         "recall": torchmetrics.Recall(task="binary"),
         "f1": torchmetrics.F1Score(task="binary"),
         "matthews": torchmetrics.MatthewsCorrCoef(task="binary"),
         "cohen": torchmetrics.CohenKappa(task="binary"),
-        # "roc": torchmetrics.ROC(task="binary"),
-        # "precision_recall_curve": torchmetrics.PrecisionRecallCurve(
-        #     task="binary"
-        # ),
-        # "confusion_matrix": torchmetrics.ConfusionMatrix(task="binary"),
+    }
+
+
+def build_vector_metrics():
+    return {
+        "auroc": torchmetrics.AUROC(task="binary"),
+        "roc": torchmetrics.ROC(task="binary"),
+        "precision_recall_curve": torchmetrics.PrecisionRecallCurve(
+            task="binary"
+        ),
+        "confusion_matrix": torchmetrics.ConfusionMatrix(task="binary"),
     }
 
 
@@ -425,7 +430,7 @@ def prepare_data() -> Tuple[
 
 
 def select_features(X_train, X_val, X_test):
-    if cfg.dataset.feature_set == "seq_only":
+    if cfg.model.feature_set == "seq_only":
         relevant_col = "peptide"
     else:
         relevant_col = "peptide_with_mhcii_pseudosequence"
@@ -455,7 +460,7 @@ def train_model(
         save_dir=get_hydra_logging_directory() / "csv", name=save_name
     )
     # wandb_logger = pl_loggers.WandbLogger(
-    #     save_dir=get_hydra_logging_directory(), name=save_name
+    #     save_dir=get_hydra_logging_directory(), project="AEGIS", name=save_name
     # )
     if device.type == "mps":
         accelerator = "mps"
@@ -591,7 +596,7 @@ def main(aegiscfg: DictConfig):
 
     n_tokens = len(list(AA_TO_INT.values()))
     device = torch.device("cuda" if USE_GPU else "cpu")  # training device
-    metrics = build_metrics()
+    metrics = 
     logger.info("Instantiating model")
     model = TransformerModel(
         seq_len=input_dim,
@@ -604,10 +609,16 @@ def main(aegiscfg: DictConfig):
         dropout=cfg.model.aegis.dropout,
         pad_num=AA_TO_INT["X"],
         batch_size=cfg.training.batch_size,
+        warmup_steps=cfg.training.learning_rate.warmup_steps,
+        epochs=cfg.training.epochs,
         start_learning_rate=cfg.training.learning_rate.start_learning_rate,
+        peak_learning_rate=cfg.training.learning_rate.peak_learning_rate,
         weight_decay=cfg.training.optimizer.weight_decay,
         loss_fn=nn.BCELoss(),
-        metrics=metrics,
+        scalar_metrics=build_scalar_metrics(),
+        vector_metrics=build_vector_metrics(),
+        n_gpu=cfg.compute.n_gpu,
+        n_cpu=cfg.compute.n_cpu,
     )
 
     tic = timer()
