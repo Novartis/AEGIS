@@ -1,5 +1,5 @@
 epochs: 4000
-batch_size: 256
+batch_size: 4096
 learning_rate:
   start_learning_rate: 0.0001
   peak_learning_rate: 0.001

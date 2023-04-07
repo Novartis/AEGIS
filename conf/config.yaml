@@ -3,7 +3,7 @@ defaults:
   - _self_
   - compute: compute_cluster
   - model: aegis_model
-  - training: training_debug
+  - training: training
   - seed: seed
   - debug: debug
   - dataset: dataset
