@@ -1,4 +1,3 @@
-
 defaults:
   - _self_
   - compute: compute_cluster
@@ -8,7 +7,7 @@ defaults:
   - debug: debug
   - dataset: dataset
   - paths: paths
-    
+
 hydra:
   run:
     dir: outputs/${now:%Y-%m-%d}/${now:%H-%M-%S}

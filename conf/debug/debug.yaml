@@ -1,3 +1,4 @@
 debug: false
 verbose: true
 n_samples_debug: 512
+benchmark: false
