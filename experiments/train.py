@@ -27,6 +27,7 @@ import pytorch_lightning as pl
 import torch
 import torchmetrics
 from Bio.SeqIO.FastaIO import SimpleFastaParser
+from mhciipresentation.callbacks import VectorLoggingCallback
 from mhciipresentation.constants import (
     AA_TO_INT,
     LEN_BOUNDS_HUMAN,
@@ -92,12 +93,12 @@ def build_scalar_metrics():
         "f1": torchmetrics.F1Score(task="binary"),
         "matthews": torchmetrics.MatthewsCorrCoef(task="binary"),
         "cohen": torchmetrics.CohenKappa(task="binary"),
+        "auroc": torchmetrics.AUROC(task="binary"),
     }
 
 
 def build_vector_metrics():
     return {
-        "auroc": torchmetrics.AUROC(task="binary"),
         "roc": torchmetrics.ROC(task="binary"),
         "precision_recall_curve": torchmetrics.PrecisionRecallCurve(
             task="binary"
@@ -329,9 +330,6 @@ def train_model(
     csv_logger = pl_loggers.CSVLogger(
         save_dir=get_hydra_logging_directory() / "csv", name=save_name
     )
-    # wandb_logger = pl_loggers.WandbLogger(
-    #     save_dir=get_hydra_logging_directory(), project="AEGIS", name=save_name
-    # )
     if device.type == "mps":
         accelerator = "mps"
     elif device.type == "cuda":
@@ -356,12 +354,14 @@ def train_model(
             LearningRateMonitor("epoch", log_momentum=cfg.debug.verbose),
             RichProgressBar(leave=True),
             RichModelSummary(),
+            VectorLoggingCallback(
+                root=Path(get_hydra_logging_directory()) / "vector_logs"
+            ),
         ],
         logger=[tb_logger, csv_logger],
         log_every_n_steps=1,
         benchmark=cfg.debug.benchmark,
     )
-    # wandb_logger.watch(model, log="all", log_freq=4)
 
     trainer.fit(model, train_loader, val_loader)
 

@@ -6,18 +6,20 @@
 File defining all protein language models used in this package.
 
 """
-
 import collections
 import math
+from pathlib import Path
 from typing import Any, Dict
 
+import matplotlib.pyplot as plt
+import pandas as pd
 import pytorch_lightning as pl
 import torch
 import torchmetrics
 from mhciipresentation.constants import AA_TO_INT_PTM, USE_GPU
 from mhciipresentation.layers import FeedForward, PositionalEncoding
 from mhciipresentation.scheduler import GradualWarmupScheduler
-from mhciipresentation.utils import prepare_batch
+from mhciipresentation.utils import prepare_batch, save_obj
 from sklearn.preprocessing import Binarizer
 from torch import nn
 from torch.autograd import Variable
@@ -79,12 +81,6 @@ class TransformerModel(pl.LightningModule):
             device (torch.device): device used for computation
         """
 
-        def update_metric_keys(metrics, prefix):
-            metrics_new = metrics.copy()
-            for metric in metrics.keys():
-                metrics_new[f"{prefix}_{metric}"] = metrics_new.pop(metric)
-            return metrics_new
-
         super().__init__()
         self.model_type = "Transformer"
         self.seq_len = seq_len
@@ -110,39 +106,46 @@ class TransformerModel(pl.LightningModule):
         self.loss_fn = loss_fn
         self.start_learning_rate = start_learning_rate
         self.weight_decay = weight_decay
-        self.scalar_metrics = scalar_metrics
         self.pad_num = pad_num
         self.batch_size = batch_size
-        train_scalar_metrics = update_metric_keys(
-            scalar_metrics.copy(), prefix="train"
-        )
-        val_scalar_metrics = update_metric_keys(
-            scalar_metrics.copy(), prefix="val"
-        )
-        test_scalar_metrics = update_metric_keys(
-            scalar_metrics.copy(), prefix="test"
-        )
-        metrics = {}
-        for d in [
-            train_scalar_metrics,
-            val_scalar_metrics,
-            test_scalar_metrics,
-        ]:
-            for k, v in d.items():
-                metrics[k] = v
-        self.vector_metrics = vector_metrics
+
         self.warmup_steps = warmup_steps
         self.epochs = epochs
         self.n_gpu = n_gpu
         self.n_cpu = n_cpu
         self.peak_learning_rate = peak_learning_rate
         self.steps_per_epoch = steps_per_epoch
+        self.init_metrics(scalar_metrics, vector_metrics)
         self.init_weights()
 
     def init_weights(self) -> None:
         """Uniform weight initialization"""
         initrange = 0.1
         self.embedding.weight.data.uniform_(-initrange, initrange)
+
+    def init_metrics(self, scalar_metrics, vector_metrics):
+        def update_metric_keys(metrics, prefix):
+            metrics_new = metrics.copy()
+            for metric in metrics.keys():
+                metrics_new[f"{prefix}_{metric}"] = metrics_new.pop(metric)
+            return metrics_new
+
+        def split_metric_builder(metrics):
+            train_metrics = update_metric_keys(metrics.copy(), prefix="train")
+            val_metrics = update_metric_keys(metrics.copy(), prefix="val")
+            test_metrics = update_metric_keys(metrics.copy(), prefix="test")
+            metrics = {}
+            for d in [
+                train_metrics,
+                val_metrics,
+                test_metrics,
+            ]:
+                for k, v in d.items():
+                    metrics[k] = v
+            return metrics
+
+        self.scalar_metrics = split_metric_builder(scalar_metrics)
+        self.vector_metrics = split_metric_builder(vector_metrics)
 
     def forward(self, data, src_padding_mask) -> torch.Tensor:
         """Defines computation to be performed for each input
@@ -204,36 +207,30 @@ class TransformerModel(pl.LightningModule):
     # def update_metrics(self, y_true, y_pred, prefix):
     #     for metric in [key for key in self.metrics.keys() if prefix in key]:
     #         self.metrics[metric].update(y_pred.cpu(), y_true.cpu().int())
+    # def log_epoch_vector_loggers(self, prefix, y_pred, y_true):
+    #     for metric in [
+    #         key for key in self.vector_metrics.keys() if prefix in key
+    #     ]:
+    #         metric_res = self.vector_metrics[metric](
+    #             y_pred.cpu(), y_true.cpu().int()
+    #         )
+    #         self.logger.experiment.log(
+    #             f"{metric}", metric_res, on_epoch=True, on_step=False
+    #         )
 
     def compute_metrics(self, prefix, y_pred, y_true):
         for metric in [
             key for key in self.scalar_metrics.keys() if prefix in key
         ]:
-            metric_res = self.scalar_metrics[metric](
-                y_pred.cpu(), y_true.cpu().int()
-            )
             self.log(
                 f"{metric}",
-                metric_res.float(),
+                self.scalar_metrics[metric](
+                    y_pred.cpu(), y_true.cpu().int()
+                ).float(),
                 sync_dist=True,
+                on_epoch=True,
+                on_step=False,
             )
-        for metric in [
-            key for key in self.vector_metrics.keys() if prefix in key
-        ]:
-            metric_res = self.vector_metrics[metric](
-                y_pred.cpu(), y_true.cpu().int()
-            )
-            self.log_dict(
-                f"{metric}",
-                metric_res.float(),
-                sync_dist=True,
-            )
-
-    def reset_metrics(self, prefix):
-        for metric in [
-            key for key in self.scalar_metrics.keys() if prefix in key
-        ]:
-            self.scalar_metrics[metric].reset()
 
     def generate_padding_mask(self, batch):
         src_padding_mask = batch[0] == self.pad_num
@@ -253,8 +250,8 @@ class TransformerModel(pl.LightningModule):
                 batch[1].view(-1, 1).double().cpu()
             )
         )
-        self.compute_metrics("train", y_true, y_hat)
-        return loss
+        self.compute_metrics("train", y_hat, y_true)
+        return {"loss": loss, "y_hat": y_hat, "y_true": y_true}
 
     def validation_step(self, batch, batch_idx):
         src_padding_mask = self.generate_padding_mask(batch)
@@ -269,6 +266,7 @@ class TransformerModel(pl.LightningModule):
             )
         )
         self.compute_metrics("val", y_true, y_hat)
+        return {"loss": loss, "y_hat": y_hat, "y_true": y_true}
 
     def test_step(self, batch, batch_idx):
         src_padding_mask = self.generate_padding_mask(batch)
@@ -283,20 +281,4 @@ class TransformerModel(pl.LightningModule):
             )
         )
         self.compute_metrics("test", y_true, y_hat)
-
-    # def on_train_epoch_end(self):
-    #     # compute metrics
-    #     self.compute_metrics("train")
-    #     # reset all metrics
-    #     self.reset_metrics("train")
-
-    # def on_validation_epoch_end(self):
-    #     # compute metrics
-    #     self.compute_metrics("val")
-    #     # reset all metrics
-
-    # def on_test_epoch_end(self):
-    #     # compute metrics
-    #     self.compute_metrics("test")
-    #     # reset all metrics
-    #     self.reset_metrics("test")
+        return {"loss": loss, "y_hat": y_hat, "y_true": y_true}
