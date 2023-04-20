@@ -17,7 +17,7 @@ import random
 from collections import Counter
 from itertools import count, tee
 from pathlib import Path
-from typing import Dict, Iterator, List, Optional, Tuple
+from typing import Any, Dict, Iterator, List, Optional, Tuple
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -929,6 +929,7 @@ def save_obj(obj, path: Path) -> None:
     make_dir(path.parent)
     with open(path, "wb") as f:
         pickle.dump(obj, f)
+
 
 def load_obj(path: Path) -> Any:
     """Loads pickle object from path.
