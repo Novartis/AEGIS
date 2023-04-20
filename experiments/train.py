@@ -349,11 +349,10 @@ def train_model(
         max_epochs=cfg.training.epochs,
         callbacks=[
             ModelCheckpoint(
-                save_weights_only=True, mode="max", monitor="val_loss"
+                save_weights_only=False, mode="min", monitor="val_loss"
             ),
             LearningRateMonitor("epoch", log_momentum=cfg.debug.verbose),
             RichProgressBar(leave=True),
-            RichModelSummary(),
             VectorLoggingCallback(
                 root=Path(get_hydra_logging_directory()) / "vector_logs"
             ),
