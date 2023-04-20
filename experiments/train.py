@@ -296,7 +296,7 @@ def prepare_data() -> (
         X_test = pd.concat([X_test_iedb, X_test_nod])
         y_train = np.hstack([y_train_iedb, y_train_nod])
         y_val = np.hstack([y_val_iedb, y_val_nod])
-        y_test = np.hstack([y_test_nod, y_test_nod])
+        y_test = np.hstack([y_test_iedb, y_test_nod])
         return (X_train, X_val, X_test, y_train, y_val, y_test)
 
 
@@ -417,11 +417,11 @@ def main(aegiscfg: DictConfig):
 
     if cfg.model.feature_set == "seq_only":
         input_dim = 33 + 2
-    elif cfg.model.feature_set == "seq_and_mhc":
+    elif cfg.model.feature_set == "seq_mhc":
         input_dim = 33 + 2 + 34
     else:
         raise ValueError(
-            f"Unknown feature set {cfg.dataset.feature_set}. "
+            f"Unknown feature set {cfg.model.feature_set}. "
             "Please choose from seq_only or seq_and_mhc"
         )
 
