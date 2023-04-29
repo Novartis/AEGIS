@@ -1,8 +1,8 @@
 epochs: 4000
-batch_size: 4096
+batch_size: 65536
 learning_rate:
-  start_learning_rate: 0.0001
-  peak_learning_rate: 0.001
+  start_learning_rate: 0.1
+  peak_learning_rate: 0.1
   warmup_steps: 5000
   reduction_factor: 2
   patience: 10
