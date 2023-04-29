@@ -1,0 +1,11 @@
+aegis:
+  embedding_size: 128
+  enc_ff_hidden: 64
+  ff_hidden: 1024
+  # n_layers: 4
+  # n_attn_heads: 4
+  n_layers: 2
+  n_attn_heads: 2
+  dropout: 0.1
+
+feature_set: seq_mhc # can also be seq_mhc
