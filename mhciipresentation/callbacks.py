@@ -1,8 +1,10 @@
 from pathlib import Path
 
+import GPUtil
 import pytorch_lightning as pl
 import torch
 from mhciipresentation.utils import make_dir, save_obj
+from torch.utils.tensorboard import SummaryWriter
 
 
 class VectorLoggingCallback(pl.Callback):
@@ -57,3 +59,27 @@ class VectorLoggingCallback(pl.Callback):
                 metric_res,
                 log_dest / str(prefix + "_" + metric + ".pkl"),
             )
+
+
+class GPUUsageLogger(pl.Callback):
+    def __init__(self, log_dir: Path):
+        super().__init__()
+        self.summary_writer = SummaryWriter(log_dir=log_dir)
+
+    def on_train_batch_end(
+        self, trainer, pl_module, outputs, batch, batch_idx, dataloader_idx=0
+    ):
+        gpu = GPUtil.getGPUs()[0]
+        global_step = trainer.global_step
+        self.summary_writer.add_scalar(
+            "gpu_usage/memory_used", gpu.memoryUsed, global_step
+        )
+        self.summary_writer.add_scalar(
+            "gpu_usage/memory_total", gpu.memoryTotal, global_step
+        )
+        self.summary_writer.add_scalar(
+            "gpu_usage/memory_utilization", gpu.memoryUtil, global_step
+        )
+        self.summary_writer.add_scalar(
+            "gpu_usage/gpu_utilization", gpu.load, global_step
+        )
