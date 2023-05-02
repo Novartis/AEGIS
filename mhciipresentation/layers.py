@@ -16,43 +16,30 @@ from torch import nn
 
 class PositionalEncoding(nn.Module):
     def __init__(
-        self, embedding_size: int, dropout: float = 0.0, max_len: int = 5000
+        self, d_model: int, dropout: float = 0.1, max_len: int = 5000
     ):
-        r"""Initializes the PositionalEncoding layer of the encoder network
-
-        Args:
-            embedding_size (int): embedding size of the data
-            dropout (float, optional): dropout rate of the output of the pe
-                layer. Defaults to 0.0.
-            max_len (int, optional): maximum length of the positional encoder.
-                Defaults to 5000.
-        """
         super().__init__()
         self.dropout = nn.Dropout(p=dropout)
 
         position = torch.arange(max_len).unsqueeze(1)
         div_term = torch.exp(
-            torch.arange(0, embedding_size, 2)
-            * (-math.log(10000.0) / embedding_size)
+            torch.arange(0, d_model, 2) * (-math.log(10000.0) / d_model)
         )
-        pe = torch.zeros(max_len, 1, embedding_size)
-        pe[:, 0, 0::2] = torch.sin(position * div_term)
-        pe[:, 0, 1::2] = torch.cos(position * div_term)
+        # pe = torch.zeros(max_len, 1, d_model)
+        pe = torch.zeros(1, max_len, d_model)
+        # pe[:, 0, 0::2] = torch.sin(position * div_term)
+        # pe[:, 0, 1::2] = torch.cos(position * div_term)
+        pe[0, :, 0::2] = torch.sin(position * div_term)
+        pe[0, :, 1::2] = torch.cos(position * div_term)
         self.register_buffer("pe", pe)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        """Computations performed on each input.
-
-        Args:
-            x (torch.Tensor): (batch_size, max_seq_len, embedding_size) output
-                data
-
-        Returns:
-            torch.Tensor: (batch_size, max_seq_len, embedding_size) output
-                positional encoding with dropout at training
         """
-        x = x + self.pe[: x.size(0)]  # type: ignore
-        return self.dropout(x)  # type: ignore
+        Arguments:
+            x: Tensor, shape ``[seq_len, batch_size, embedding_dim]``
+        """
+        x = x + self.pe[: x.size(0)]
+        return self.dropout(x)
 
 
 class FeedForward(nn.Module):
@@ -99,7 +86,9 @@ class TemperatureScaling(nn.Module):
     Adapted from: https://github.com/gpleiss/temperature_scaling/blob/master/temperature_scaling.py
     """
 
-    def __init__(self,):
+    def __init__(
+        self,
+    ):
         super().__init__()
         self.temperature = nn.Parameter(torch.ones(1) * 1.5)
 
