@@ -18,7 +18,11 @@ import torch
 import torchmetrics
 from mhciipresentation.constants import AA_TO_INT_PTM, USE_GPU
 from mhciipresentation.layers import FeedForward, PositionalEncoding
-from mhciipresentation.scheduler import GradualWarmupScheduler
+from mhciipresentation.scheduler import (
+    GradualWarmupScheduler,
+    NoamScheduler,
+    linear_warmup_decay,
+)
 from mhciipresentation.utils import prepare_batch, save_obj
 from sklearn.preprocessing import Binarizer
 from torch import nn
@@ -84,7 +88,7 @@ class TransformerModel(pl.LightningModule):
         super().__init__()
         self.model_type = "Transformer"
         self.seq_len = seq_len
-        self.pos_encoder = PositionalEncoding(embedding_size, dropout, 5000)
+        self.pos_encoder = PositionalEncoding(embedding_size, dropout, seq_len)
         encoder_layers = TransformerEncoderLayer(
             embedding_size,
             n_attn_heads,
@@ -173,50 +177,17 @@ class TransformerModel(pl.LightningModule):
             lr=self.start_learning_rate,
             weight_decay=self.weight_decay,
         )
-        cosine_scheduler = torch.optim.lr_scheduler.OneCycleLR(
-            optimizer,
-            max_lr=self.peak_learning_rate,
-            epochs=self.epochs,
-            steps_per_epoch=self.steps_per_epoch,
-            pct_start=0.1,
-        )
 
-        lr_scheduler = {
-            # "scheduler": torch.optim.lr_scheduler.CyclicLR(
-            #     optimizer,
-            #     base_lr=self.start_learning_rate,
-            #     max_lr=self.peak_learning_rate,
-            #     step_size_up=5000,
-            #     cycle_momentum=False,
-            # ),
-            "scheduler": GradualWarmupScheduler(
+        scheduler = {
+            "scheduler": NoamScheduler(
                 optimizer,
-                multiplier=2,
-                total_epoch=self.epochs,
-                after_scheduler=cosine_scheduler,
+                self.peak_learning_rate,
+                warmup_steps=self.warmup_steps,
             ),
-            "monitor": "val_loss",
             "interval": "step",
         }
 
-        return {
-            "optimizer": optimizer,
-            "lr_scheduler": lr_scheduler,
-        }
-
-    # def update_metrics(self, y_true, y_pred, prefix):
-    #     for metric in [key for key in self.metrics.keys() if prefix in key]:
-    #         self.metrics[metric].update(y_pred.cpu(), y_true.cpu().int())
-    # def log_epoch_vector_loggers(self, prefix, y_pred, y_true):
-    #     for metric in [
-    #         key for key in self.vector_metrics.keys() if prefix in key
-    #     ]:
-    #         metric_res = self.vector_metrics[metric](
-    #             y_pred.cpu(), y_true.cpu().int()
-    #         )
-    #         self.logger.experiment.log(
-    #             f"{metric}", metric_res, on_epoch=True, on_step=False
-    #         )
+        return [optimizer], [scheduler]
 
     def compute_metrics(self, prefix, y_pred, y_true):
         for metric in [
@@ -224,9 +195,7 @@ class TransformerModel(pl.LightningModule):
         ]:
             self.log(
                 f"{metric}",
-                self.scalar_metrics[metric](
-                    y_pred.cpu(), y_true.cpu().int()
-                ).float(),
+                self.scalar_metrics[metric](y_pred.cpu(), y_true).float(),
                 sync_dist=True,
                 on_epoch=True,
                 on_step=False,
@@ -245,6 +214,7 @@ class TransformerModel(pl.LightningModule):
         self.log(
             "train_loss", loss, batch_size=batch[0].shape[0], sync_dist=True
         )
+
         y_true = torch.Tensor(
             Binarizer(threshold=0.5).transform(
                 batch[1].view(-1, 1).double().cpu()
@@ -253,7 +223,7 @@ class TransformerModel(pl.LightningModule):
         self.compute_metrics("train", y_hat, y_true)
         return {"loss": loss, "y_hat": y_hat, "y_true": y_true}
 
-    def validation_step(self, batch, batch_idx):
+    def validation_step(self, batch, batch_idx, dataloader_idx=0):
         src_padding_mask = self.generate_padding_mask(batch)
         y_hat = self(batch, src_padding_mask)
         loss = self.loss_fn(y_hat, batch[1].view(-1, 1).double())
@@ -265,10 +235,10 @@ class TransformerModel(pl.LightningModule):
                 batch[1].view(-1, 1).double().cpu()
             )
         )
-        self.compute_metrics("val", y_true, y_hat)
+        self.compute_metrics("val", y_hat, y_true)
         return {"loss": loss, "y_hat": y_hat, "y_true": y_true}
 
-    def test_step(self, batch, batch_idx):
+    def test_step(self, batch, batch_idx, dataloader_idx=1):
         src_padding_mask = self.generate_padding_mask(batch)
         y_hat = self(batch, src_padding_mask)
         loss = self.loss_fn(y_hat, batch[1].view(-1, 1).double())
@@ -280,5 +250,5 @@ class TransformerModel(pl.LightningModule):
                 batch[1].view(-1, 1).double().cpu()
             )
         )
-        self.compute_metrics("test", y_true, y_hat)
+        self.compute_metrics("test", y_hat, y_true)
         return {"loss": loss, "y_hat": y_hat, "y_true": y_true}
