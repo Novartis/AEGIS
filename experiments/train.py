@@ -27,7 +27,7 @@ import pytorch_lightning as pl
 import torch
 import torchmetrics
 from Bio.SeqIO.FastaIO import SimpleFastaParser
-from mhciipresentation.callbacks import VectorLoggingCallback
+from mhciipresentation.callbacks import GPUUsageLogger, VectorLoggingCallback
 from mhciipresentation.constants import (
     AA_TO_INT,
     LEN_BOUNDS_HUMAN,
@@ -93,7 +93,7 @@ def build_scalar_metrics():
         "f1": torchmetrics.F1Score(task="binary"),
         "matthews": torchmetrics.MatthewsCorrCoef(task="binary"),
         "cohen": torchmetrics.CohenKappa(task="binary"),
-        "auroc": torchmetrics.AUROC(task="binary"),
+        "auroc": torchmetrics.classification.BinaryAUROC(),
     }
 
 
@@ -340,7 +340,9 @@ def train_model(
         raise ValueError("Unknown Pytorch Lightning Accelerator")
     logger.info(f"Set pytorch lightning accelerator as {accelerator}")
     logger.info(f"Instantiating Trainer")
-
+    usage_logger = GPUUsageLogger(
+        log_dir=get_hydra_logging_directory() / "tensorboard" / "gpu_usage"
+    )
     trainer = pl.Trainer(
         default_root_dir=save_path,
         accelerator=device.type,
@@ -349,20 +351,24 @@ def train_model(
         max_epochs=cfg.training.epochs,
         callbacks=[
             ModelCheckpoint(
-                save_weights_only=False, mode="min", monitor="val_loss"
+                save_weights_only=False,
+                mode="min",
+                monitor="val_loss/dataloader_idx_0",
             ),
             LearningRateMonitor("epoch", log_momentum=cfg.debug.verbose),
             RichProgressBar(leave=True),
             VectorLoggingCallback(
                 root=Path(get_hydra_logging_directory()) / "vector_logs"
             ),
+            usage_logger,
         ],
         logger=[tb_logger, csv_logger],
         log_every_n_steps=1,
         benchmark=cfg.debug.benchmark,
+        # profiler=cfg.debug.profiler,
     )
 
-    trainer.fit(model, train_loader, val_loader)
+    trainer.fit(model, train_loader, val_dataloaders=[val_loader, test_loader])
 
     logger.info(f"Total number of parameters: {count_parameters(model)}")
     logger.info(f"Testing model on validation and test set.")
