@@ -1,6 +1,6 @@
 debug: false
 # debug: true
 verbose: true
-n_samples_debug: 583
+n_samples_debug: 5120
 benchmark: false
-profiler: "simple"
+profiler: null
