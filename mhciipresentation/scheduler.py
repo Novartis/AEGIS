@@ -4,7 +4,9 @@ from torch.optim.lr_scheduler import _LRScheduler
 
 
 class NoamScheduler(_LRScheduler):
-    def __init__(self, optimizer, d_model, warmup_steps, last_epoch=-1, verbose=False):
+    def __init__(
+        self, optimizer, d_model, warmup_steps, last_epoch=-1, verbose=False
+    ):
         self.d_model = d_model
         self.warmup_steps = warmup_steps
         super(NoamScheduler, self).__init__(optimizer, last_epoch, verbose)
