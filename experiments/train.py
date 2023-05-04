@@ -73,7 +73,7 @@ from pytorch_lightning.callbacks import (
 )
 from pytorch_lightning.callbacks.progress.rich_progress import RichProgressBar
 from torch import nn
-from torch.optim import Adam
+from torch.optim import AdamW
 from torch.utils.data import DataLoader, TensorDataset
 from torchmetrics.classification import BinaryAccuracy
 from tqdm import tqdm
