@@ -12,11 +12,12 @@ import json
 import logging
 import math
 import os
+import pickle
 import random
 from collections import Counter
 from itertools import count, tee
 from pathlib import Path
-from typing import Dict, Iterator, List, Optional, Tuple
+from typing import Any, Dict, Iterator, List, Optional, Tuple
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -922,3 +923,30 @@ def assign_pseudosequences(
         ] = assigned.Pseudosequence
 
     return decoys
+
+
+def save_obj(obj, path: Path) -> None:
+    make_dir(path.parent)
+    with open(path, "wb") as f:
+        pickle.dump(obj, f)
+
+
+def load_obj(path: Path) -> Any:
+    """Loads pickle object from path.
+
+    Args:
+        path (Path): path to pickle file
+        use_logging (bool, optional): Whether or not to use logging. Defaults to True.
+        temporary (bool, optional): Whether or not the print statement should be temporary. Defaults to False.
+
+    Raises:
+        FileNotFoundError: if file does not exist
+        NotADirectoryError: if file is not a file
+        ValueError: if file is not a pickle file
+
+    Returns:
+        Any: loaded object
+    """
+    with open(path, "rb") as f:
+        obj = pickle.load(f)
+    return obj

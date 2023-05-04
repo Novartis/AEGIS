@@ -27,6 +27,7 @@ import pytorch_lightning as pl
 import torch
 import torchmetrics
 from Bio.SeqIO.FastaIO import SimpleFastaParser
+from mhciipresentation.callbacks import GPUUsageLogger, VectorLoggingCallback
 from mhciipresentation.constants import (
     AA_TO_INT,
     LEN_BOUNDS_HUMAN,
@@ -72,7 +73,7 @@ from pytorch_lightning.callbacks import (
 )
 from pytorch_lightning.callbacks.progress.rich_progress import RichProgressBar
 from torch import nn
-from torch.optim import Adam
+from torch.optim import AdamW
 from torch.utils.data import DataLoader, TensorDataset
 from torchmetrics.classification import BinaryAccuracy
 from tqdm import tqdm
@@ -92,12 +93,12 @@ def build_scalar_metrics():
         "f1": torchmetrics.F1Score(task="binary"),
         "matthews": torchmetrics.MatthewsCorrCoef(task="binary"),
         "cohen": torchmetrics.CohenKappa(task="binary"),
+        "auroc": torchmetrics.classification.BinaryAUROC(),
     }
 
 
 def build_vector_metrics():
     return {
-        "auroc": torchmetrics.AUROC(task="binary"),
         "roc": torchmetrics.ROC(task="binary"),
         "precision_recall_curve": torchmetrics.PrecisionRecallCurve(
             task="binary"
@@ -295,7 +296,7 @@ def prepare_data() -> (
         X_test = pd.concat([X_test_iedb, X_test_nod])
         y_train = np.hstack([y_train_iedb, y_train_nod])
         y_val = np.hstack([y_val_iedb, y_val_nod])
-        y_test = np.hstack([y_test_nod, y_test_nod])
+        y_test = np.hstack([y_test_iedb, y_test_nod])
         return (X_train, X_val, X_test, y_train, y_val, y_test)
 
 
@@ -329,9 +330,6 @@ def train_model(
     csv_logger = pl_loggers.CSVLogger(
         save_dir=get_hydra_logging_directory() / "csv", name=save_name
     )
-    # wandb_logger = pl_loggers.WandbLogger(
-    #     save_dir=get_hydra_logging_directory(), project="AEGIS", name=save_name
-    # )
     if device.type == "mps":
         accelerator = "mps"
     elif device.type == "cuda":
@@ -342,7 +340,9 @@ def train_model(
         raise ValueError("Unknown Pytorch Lightning Accelerator")
     logger.info(f"Set pytorch lightning accelerator as {accelerator}")
     logger.info(f"Instantiating Trainer")
-
+    usage_logger = GPUUsageLogger(
+        log_dir=get_hydra_logging_directory() / "tensorboard" / "gpu_usage"
+    )
     trainer = pl.Trainer(
         default_root_dir=save_path,
         accelerator=device.type,
@@ -351,19 +351,24 @@ def train_model(
         max_epochs=cfg.training.epochs,
         callbacks=[
             ModelCheckpoint(
-                save_weights_only=True, mode="max", monitor="val_loss"
+                save_weights_only=False,
+                mode="min",
+                monitor="val_loss/dataloader_idx_0",
             ),
             LearningRateMonitor("epoch", log_momentum=cfg.debug.verbose),
             RichProgressBar(leave=True),
-            RichModelSummary(),
+            VectorLoggingCallback(
+                root=Path(get_hydra_logging_directory()) / "vector_logs"
+            ),
+            usage_logger,
         ],
         logger=[tb_logger, csv_logger],
         log_every_n_steps=1,
         benchmark=cfg.debug.benchmark,
+        # profiler=cfg.debug.profiler,
     )
-    # wandb_logger.watch(model, log="all", log_freq=4)
 
-    trainer.fit(model, train_loader, val_loader)
+    trainer.fit(model, train_loader, val_dataloaders=[val_loader, test_loader])
 
     logger.info(f"Total number of parameters: {count_parameters(model)}")
     logger.info(f"Testing model on validation and test set.")
@@ -418,11 +423,11 @@ def main(aegiscfg: DictConfig):
 
     if cfg.model.feature_set == "seq_only":
         input_dim = 33 + 2
-    elif cfg.model.feature_set == "seq_and_mhc":
+    elif cfg.model.feature_set == "seq_mhc":
         input_dim = 33 + 2 + 34
     else:
         raise ValueError(
-            f"Unknown feature set {cfg.dataset.feature_set}. "
+            f"Unknown feature set {cfg.model.feature_set}. "
             "Please choose from seq_only or seq_and_mhc"
         )
 
