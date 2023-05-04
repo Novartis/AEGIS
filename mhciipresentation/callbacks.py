@@ -69,17 +69,18 @@ class GPUUsageLogger(pl.Callback):
     def on_train_batch_end(
         self, trainer, pl_module, outputs, batch, batch_idx, dataloader_idx=0
     ):
-        gpu = GPUtil.getGPUs()[0]
-        global_step = trainer.global_step
-        self.summary_writer.add_scalar(
-            "gpu_usage/memory_used", gpu.memoryUsed, global_step
-        )
-        self.summary_writer.add_scalar(
-            "gpu_usage/memory_total", gpu.memoryTotal, global_step
-        )
-        self.summary_writer.add_scalar(
-            "gpu_usage/memory_utilization", gpu.memoryUtil, global_step
-        )
-        self.summary_writer.add_scalar(
-            "gpu_usage/gpu_utilization", gpu.load, global_step
-        )
+        if batch_idx % 100 == 0:
+            gpu = GPUtil.getGPUs()[0]
+            global_step = trainer.global_step
+            self.summary_writer.add_scalar(
+                "gpu_usage/memory_used", gpu.memoryUsed, global_step
+            )
+            self.summary_writer.add_scalar(
+                "gpu_usage/memory_total", gpu.memoryTotal, global_step
+            )
+            self.summary_writer.add_scalar(
+                "gpu_usage/memory_utilization", gpu.memoryUtil, global_step
+            )
+            self.summary_writer.add_scalar(
+                "gpu_usage/gpu_utilization", gpu.load, global_step
+            )
