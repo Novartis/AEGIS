@@ -6,59 +6,63 @@
 This script validates our model against CD4 datasets.
 """
 
-import argparse
-import copy
-import json
-import pprint
-import random
-from typing import Dict, List, Tuple
+import logging
+import warnings
+from pathlib import Path
 
+import hydra
 import numpy as np
+import omegaconf
 import pandas as pd
+import pytorch_lightning as pl
 import torch
-from Bio.SeqIO.FastaIO import SimpleFastaParser
-from torch import nn
-from tqdm import tqdm
-
-from mhciipresentation.constants import (
-    AA_TO_INT,
-    LEN_BOUNDS_HUMAN,
-    USE_CONTEXT,
-    USE_GPU,
-    USE_SUBSET,
+from mhciipresentation.callbacks import GPUUsageLogger, VectorLoggingCallback
+from mhciipresentation.constants import AA_TO_INT
+from mhciipresentation.inference import make_inference
+from mhciipresentation.loaders import epitope_file_parser
+from mhciipresentation.metrics import (
+    build_scalar_metrics,
+    build_vector_metrics,
+    compute_performance_metrics,
+    save_performance_metrics,
 )
-from mhciipresentation.inference import setup_model
-from mhciipresentation.loaders import (
-    epitope_file_parser,
-    load_K562_dataset,
-    load_melanoma_dataset,
-    load_pseudosequences,
-    load_uniprot,
-)
-from mhciipresentation.paths import DATA_DIR, EPITOPES_DIR, RAW_DATA
-from mhciipresentation.transformer import (
-    TransformerModel,
-    evaluate_transformer,
-)
+from mhciipresentation.paths import RAW_DATA
 from mhciipresentation.utils import (
     assign_pseudosequences,
     attach_pseudosequence,
-    compute_performance_measures,
     encode_aa_sequences,
     flatten_lists,
+    get_accelerator,
+    get_hydra_logging_directory,
     make_dir,
-    make_predictions_with_transformer,
-    render_roc_curve,
     render_precision_recall_curve,
+    render_roc_curve,
     sample_from_human_uniprot,
-    set_pandas_options,
 )
+from omegaconf import DictConfig
+from pyprojroot import here
+from pytorch_lightning import loggers as pl_loggers
+from pytorch_lightning.callbacks.progress.rich_progress import RichProgressBar
+from torch.utils.data import DataLoader, TensorDataset
 
-set_pandas_options()
+warnings.filterwarnings("ignore")
+
+cfg: DictConfig
+
+logger = logging.getLogger(__name__)
 
 
-def main():
-    print("CD4")
+@hydra.main(
+    version_base="1.3", config_path=str(here() / "conf"), config_name="config"
+)
+def main(cd4config: DictConfig) -> None:
+    global cfg
+    cfg = cd4config
+    logger.info("CD4")
+    logger.info(
+        "Training with the following"
+        f" config:\n{omegaconf.omegaconf.OmegaConf.to_yaml(cfg)}"
+    )
     epitope_df = epitope_file_parser(RAW_DATA / "CD4_epitopes.fsa")
     epitope_df["label"] = 1
     epitope_df = attach_pseudosequence(epitope_df)
@@ -96,73 +100,32 @@ def main():
         ]
     )
 
-    if FLAGS.model_with_pseudo_path is not None:
+    if cfg.model.feature_set == "seq_mhc":
+        input_dim = 33 + 2 + 34
         X = encode_aa_sequences(
             data.peptides_and_pseudosequence,
             AA_TO_INT,
         )
-    else:
+    elif cfg.model.feature_set == "seq_only":
+        input_dim = 33 + 2
         X = encode_aa_sequences(
             data.Sequence,
             AA_TO_INT,
         )
-
-    y = data.label.values
-    # batch_size = 5000
-
-    device = torch.device("cuda" if USE_GPU else "cpu")  # training device
-    if FLAGS.model_with_pseudo_path is not None:
-        model, input_dim, max_len = setup_model(
-            device, FLAGS.model_with_pseudo_path
-        )
     else:
-        model, input_dim, max_len = setup_model(
-            device, FLAGS.model_wo_pseudo_path
+        raise ValueError(
+            f"Unknown feature set {cfg.model.feature_set}. "
+            "Please choose from seq_only or seq_and_mhc"
         )
 
-    batch_size = max_len
-    predictions = make_predictions_with_transformer(
-        X, batch_size, device, model, input_dim, AA_TO_INT["X"]
-    )
-    performance = compute_performance_measures(predictions, y)
-    print(performance)
-    make_dir(FLAGS.results)
-    render_roc_curve(
-        predictions,
-        y,
-        FLAGS.results,
-        "CD4 validation set with pseudosequence",
-        "CD4_test_with_pseudo",
-    )
-    render_precision_recall_curve(
-        predictions,
-        y,
-        FLAGS.results,
-        "CD4 validation set with pseudosequence",
-        "CD4_test_with_pseudo",
+    make_inference(
+        X,
+        data.label.values,
+        cfg,
+        input_dim,
+        here() / "outputs" / "cd4",
     )
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser()
-    parser.add_argument(
-        "--model_with_pseudo_path",
-        "-modp",
-        type=str,
-        help="Path to the checkpoint of the model to evaluate.",
-    )
-    parser.add_argument(
-        "--model_wo_pseudo_path",
-        "-modwop",
-        type=str,
-        help="Path to the checkpoint of the model to evaluate.",
-    )
-    parser.add_argument(
-        "--results",
-        "-ress",
-        type=str,
-        help="Path storing the results should be stored.",
-    )
-
-    FLAGS = parser.parse_args()
     main()

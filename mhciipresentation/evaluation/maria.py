@@ -10,18 +10,19 @@ evaluated.
 import argparse
 import copy
 import json
+import logging
 import pprint
 import random
+import warnings
 from pathlib import Path
 from typing import Dict, List, Tuple
 
+import hydra
 import numpy as np
 import pandas as pd
+import pytorch_lightning as pl
 import torch
 from Bio.SeqIO.FastaIO import SimpleFastaParser
-from torch import nn
-from tqdm import tqdm
-
 from mhciipresentation.constants import (
     AA_TO_INT,
     LEN_BOUNDS_HUMAN,
@@ -29,32 +30,45 @@ from mhciipresentation.constants import (
     USE_GPU,
     USE_SUBSET,
 )
-from mhciipresentation.inference import setup_model
+from mhciipresentation.inference import make_inference, setup_model
 from mhciipresentation.loaders import (
     load_K562_dataset,
     load_melanoma_dataset,
     load_pseudosequences,
     load_uniprot,
 )
-from mhciipresentation.paths import DATA_DIR, EPITOPES_DIR, RAW_DATA
-from mhciipresentation.transformer import (
-    TransformerModel,
-    evaluate_transformer,
+from mhciipresentation.metrics import (
+    build_scalar_metrics,
+    build_vector_metrics,
+    compute_performance_metrics,
+    save_performance_metrics,
 )
+from mhciipresentation.paths import DATA_DIR, EPITOPES_DIR, RAW_DATA
 from mhciipresentation.utils import (
     assign_pseudosequences,
-    compute_performance_measures,
     encode_aa_sequences,
     flatten_lists,
+    get_accelerator,
+    get_hydra_logging_directory,
     make_dir,
     make_predictions_with_transformer,
-    render_roc_curve,
     render_precision_recall_curve,
+    render_roc_curve,
     sample_from_human_uniprot,
     set_pandas_options,
 )
+from omegaconf import DictConfig
+from pyprojroot import here
+from pytorch_lightning import loggers as pl_loggers
+from pytorch_lightning.callbacks.progress.rich_progress import RichProgressBar
+from torch import nn
+from torch.utils.data import DataLoader, TensorDataset
+from tqdm import tqdm
 
 set_pandas_options()
+logger = logging.getLogger(__name__)
+
+cfg: DictConfig
 
 
 def load_DRB1_0101_DRB1_0404() -> List[str]:
@@ -69,7 +83,7 @@ def load_DRB1_0101_DRB1_0404() -> List[str]:
     ].Pseudosequence.to_list()
 
 
-def handle_K562_dataset(ligands: pd.DataFrame, title: str, fname: str) -> None:
+def handle_K562_dataset(ligands: pd.DataFrame, fname: str) -> None:
     """Make predictions on K562 ligand dataset
 
     Args:
@@ -84,54 +98,46 @@ def handle_K562_dataset(ligands: pd.DataFrame, title: str, fname: str) -> None:
     decoys = pd.DataFrame(flatten_lists(decoys), columns=["Sequence"])
     decoys["label"] = 0
     decoys = assign_pseudosequences(ligands, decoys)
-    dataset = pd.concat(
+    data = pd.concat(
         [
             ligands[["Sequence", "label", "Pseudosequence"]],
             decoys[["Sequence", "label", "Pseudosequence"]],
         ]
     )
-    # dataset["peptides_and_pseudosequence"] = dataset["Sequence"].astype(
-    #     str
-    # ) + dataset["Pseudosequence"].astype(str)
+    data["peptides_and_pseudosequence"] = data["Sequence"].astype(str) + data[
+        "Pseudosequence"
+    ].astype(str)
 
     device = torch.device("cuda" if USE_GPU else "cpu")  # training device
 
-    if FLAGS.model_wo_pseudo_path is not None:
-        model, input_dim, max_len = setup_model(
-            device, FLAGS.model_wo_pseudo_path
-        )
-    else:
-        model, input_dim, max_len = setup_model(
-            device, FLAGS.model_with_pseudo_path
-        )
-
-    if FLAGS.model_wo_pseudo_path:
+    if cfg.model.feature_set == "seq_mhc":
+        input_dim = 33 + 2 + 34
         X = encode_aa_sequences(
-            dataset.Sequence,
+            data.peptides_and_pseudosequence,
+            AA_TO_INT,
+        )
+    elif cfg.model.feature_set == "seq_only":
+        input_dim = 33 + 2
+        X = encode_aa_sequences(
+            data.Sequence,
             AA_TO_INT,
         )
     else:
-        X = encode_aa_sequences(
-            dataset.Sequence.astype("string")
-            + dataset.Pseudosequence.astype("string"),
-            AA_TO_INT,
+        raise ValueError(
+            f"Unknown feature set {cfg.model.feature_set}. "
+            "Please choose from seq_only or seq_and_mhc"
         )
 
-    y = dataset.label.values
-    batch_size = max_len
-    predictions = make_predictions_with_transformer(
-        X, batch_size, device, model, input_dim, AA_TO_INT["X"]
+    make_inference(
+        X,
+        data.label.values,
+        cfg,
+        input_dim,
+        here() / "outputs" / "k562" / fname,
     )
-    performance = compute_performance_measures(predictions, y)
-    print(performance)
-    make_dir(FLAGS.results)
-    render_roc_curve(predictions, y, FLAGS.results, title, fname)
-    render_precision_recall_curve(predictions, y, FLAGS.results, title, fname)
 
 
-def handle_melanoma_dataset(
-    ligands: pd.DataFrame, title: str, fname: str
-) -> None:
+def handle_melanoma_dataset(ligands: pd.DataFrame, fname: str) -> None:
     """Makes predictions on the melanoma dataset.
 
     Args:
@@ -145,7 +151,7 @@ def handle_melanoma_dataset(
     ligands["label"] = 1
     decoys = pd.DataFrame(flatten_lists(decoys), columns=["Sequence"])
     decoys["label"] = 0
-    dataset = pd.concat(
+    data = pd.concat(
         [
             ligands[["Sequence", "label"]],
             decoys[["Sequence", "label"]],
@@ -153,40 +159,37 @@ def handle_melanoma_dataset(
     )
     device = torch.device("cuda" if USE_GPU else "cpu")  # training device
 
-    if FLAGS.model_wo_pseudo_path is not None:
-        model, input_dim, max_len = setup_model(
-            device, FLAGS.model_wo_pseudo_path
-        )
-    else:
-        model, input_dim, max_len = setup_model(
-            device, FLAGS.model_with_pseudo_path
-        )
-
-    if FLAGS.model_wo_pseudo_path:
+    if cfg.model.feature_set == "seq_only":
+        input_dim = 33 + 2
         X = encode_aa_sequences(
-            dataset.Sequence,
+            data.Sequence,
             AA_TO_INT,
         )
+    elif cfg.model.feature_set == "seq_only":
+        raise Exception("Data not available")
     else:
-        X = encode_aa_sequences(
-            dataset.Sequence,
-            AA_TO_INT,
+        raise ValueError(
+            f"Unknown feature set {cfg.model.feature_set}. "
+            "Please choose from seq_only or seq_and_mhc"
         )
 
-    y = dataset.label.values
-    batch_size = max_len
-    predictions = make_predictions_with_transformer(
-        X, batch_size, device, model, input_dim, AA_TO_INT["X"]
+    make_inference(
+        X,
+        data.label.values,
+        cfg,
+        input_dim,
+        here() / "outputs" / "melanoma",
     )
-    performance = compute_performance_measures(predictions, y)
-    print(performance)
-    render_roc_curve(predictions, y, FLAGS.results, title, fname)
-    render_precision_recall_curve(predictions, y, FLAGS.results, title, fname)
 
 
-def main():
+@hydra.main(
+    version_base="1.3", config_path=str(here() / "conf"), config_name="config"
+)
+def main(mariaconfig: DictConfig) -> None:
+    global cfg
+    cfg = mariaconfig
     make_dir(Path("./data/evaluation/"))
-    print("Handle K562 datasets")
+    logger.info("Handle K562 datasets")
     DRB1_0101_ligands, DRB1_0404_ligands = load_K562_dataset()
     # To exclude shorter peptides in the test set
     DRB1_0101_ligands = DRB1_0101_ligands.loc[
@@ -199,49 +202,22 @@ def main():
     DRB1_0101, DRB1_0404 = load_DRB1_0101_DRB1_0404()
     DRB1_0101_ligands["Pseudosequence"] = DRB1_0101
     DRB1_0404_ligands["Pseudosequence"] = DRB1_0404
-    print("DRB1_0101")
+    logger.info("DRB1_0101")
     handle_K562_dataset(
         DRB1_0101_ligands,
-        "Differentiating K562 DRB1*01:01 ligands from decoys",
         "DRB1_0101_ligands",
     )
-    print("DRB1_0404")
+    logger.info("DRB1_0404")
     handle_K562_dataset(
         DRB1_0404_ligands,
-        "Differentiating K562 DRB1*04:04 ligands from decoys",
         "DRB1_0404_ligands",
     )
-    print("DRB1_0404")
+    logger.info("DRB1_0404")
     melanoma_dataset = load_melanoma_dataset()
-    print("Handle melanoma datasets")
-    print(melanoma_dataset.shape)
-    handle_melanoma_dataset(
-        melanoma_dataset, "Differentiating melanoma dataset", "Melanoma"
-    )
+    logger.info("Handle melanoma datasets")
+    logger.info(melanoma_dataset.shape)
+    handle_melanoma_dataset(melanoma_dataset, "Melanoma")
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser()
-    parser.add_argument(
-        "--model_with_pseudo_path",
-        "-modp",
-        type=str,
-        help="Path to the checkpoint of the model to evaluate.",
-        required=False,
-    )
-    parser.add_argument(
-        "--model_wo_pseudo_path",
-        "-modwop",
-        type=str,
-        help="Path to the checkpoint of the model to evaluate.",
-        required=False,
-    )
-    parser.add_argument(
-        "--results",
-        "-ress",
-        type=str,
-        help="Path storing the results should be stored.",
-    )
-
-    FLAGS = parser.parse_args()
     main()

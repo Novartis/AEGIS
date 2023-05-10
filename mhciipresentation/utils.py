@@ -19,6 +19,7 @@ from itertools import count, tee
 from pathlib import Path
 from typing import Any, Dict, Iterator, List, Optional, Tuple
 
+import hydra
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
@@ -68,8 +69,12 @@ def set_seeds(seed=42, reproducibility=True):
         torch.backends.cudnn.benchmark = True
 
 
-def get_accelerator(debug=False, n_devices=1, use_mps=False, use_cuda=False):
+def get_hydra_logging_directory() -> Path:
+    hydra_cfg = hydra.core.hydra_config.HydraConfig.get()  # type: ignore
+    return Path(hydra_cfg["runtime"]["output_dir"])  # type: ignore
 
+
+def get_accelerator(debug=False, n_devices=1, use_mps=False, use_cuda=False):
     if use_mps and use_cuda:
         raise ValueError("Cannot use both MPS and CUDA.")
     if use_mps and n_devices > 1:
@@ -337,39 +342,6 @@ def join_peptide_with_pseudosequence(
     )
 
 
-def compute_performance_measures(
-    y_pred: np.ndarray, y_true: np.ndarray
-) -> Dict:
-    """Computes necessary measures to assess model performance
-
-    Args:
-        y_pred (np.ndarray): predicted output by the model
-        y_true (np.ndarray): ground truth label
-
-    Returns:
-        Dict: set of performance measures associated to predictions
-    """
-    y_pred_bin = Binarizer(threshold=0.5).transform(y_pred)
-    precision, recall, f1, _ = precision_recall_fscore_support(
-        y_true, y_pred_bin, average="binary"
-    )
-    auc = roc_auc_score(y_true, y_pred)
-    matthews = matthews_corrcoef(y_true, y_pred_bin)
-    tn, fp, fn, tp = confusion_matrix(y_true, y_pred_bin).ravel()
-
-    return {
-        "f1": f1,
-        "precision": precision,
-        "recall": recall,
-        "auc": auc,
-        "matthews_corrcoef": matthews,
-        "tn": int(tn),
-        "fp": int(fp),
-        "fn": int(fn),
-        "tp": int(tp),
-    }
-
-
 def prepare_batch(
     step: int,
     batch_size: int,
@@ -403,7 +375,6 @@ def prepare_batch(
     batch_in = []
     batch_target = []
     for sample_idx in range(step, min(step + batch_size, dataset_size), 1):
-
         in_seq = features[sample_idx]
         target = labels[sample_idx]
 
@@ -838,12 +809,13 @@ def sample_peptides(hs_uniprot_str: str, peptide_length: int, n: int) -> List:
         peptide_candidate = hs_uniprot_str[start : start + peptide_length]
         if "|" not in peptide_candidate:
             peptides.append(peptide_candidate)
-        logger.info(
-            "Sampling peptides from SwissProt space"
-            f" {(len(peptides)/n)*100}% complete.",
+        print(
+            (
+                "Sampling peptides from SwissProt space"
+                f" {(len(peptides)/n)*100}% complete."
+            ),
             end="\r",
         )
-    logger.info("")
     return peptides
 
 
