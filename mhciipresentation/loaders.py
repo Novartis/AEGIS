@@ -135,9 +135,9 @@ def load_motif_exclusion_idx(fold: int) -> Tuple[pd.DataFrame, pd.DataFrame]:
     return X_train_idx, X_val_idx
 
 
-def load_sa_el_levenstein_idx() -> Tuple[
-    pd.DataFrame, pd.DataFrame, pd.DataFrame
-]:
+def load_sa_el_levenstein_idx() -> (
+    Tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]
+):
     """Loads Levenstein stratification of the datasets.
 
     Returns:
@@ -344,7 +344,7 @@ def load_uniprot() -> pd.DataFrame:
         uniprot = pd.DataFrame(columns=uniprot_columns)
         for shard in uniprot_shards:
             uniprot_shard_df = pd.read_csv(CACHE_DIR / shard, index_col=0)
-            uniprot = uniprot.append(uniprot_shard_df)
+            uniprot = pd.concat([uniprot, uniprot_shard_df])
     return uniprot
 
 
