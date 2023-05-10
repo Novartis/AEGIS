@@ -48,16 +48,20 @@ from mhciipresentation.loaders import (
     load_pseudosequences,
     load_sa_random_idx,
 )
+from mhciipresentation.metrics import (
+    build_scalar_metrics,
+    build_vector_metrics,
+)
 from mhciipresentation.models import TransformerModel
 from mhciipresentation.paths import LOGS_DIR
 from mhciipresentation.profiler import CustomAdvancedProfiler
 from mhciipresentation.utils import (
     add_peptide_context,
     check_cache,
-    compute_performance_measures,
     count_parameters,
     encode_aa_sequences,
     flatten_lists,
+    get_hydra_logging_directory,
     get_n_trainable_params,
     join_peptide_with_pseudosequence,
     make_dir,
@@ -81,7 +85,6 @@ from pytorch_lightning.callbacks.progress.rich_progress import RichProgressBar
 from torch import nn
 from torch.optim import AdamW
 from torch.utils.data import DataLoader, TensorDataset
-from torchmetrics.classification import BinaryAccuracy
 from tqdm import tqdm
 
 warnings.filterwarnings("ignore")
@@ -89,33 +92,6 @@ warnings.filterwarnings("ignore")
 cfg: DictConfig
 
 logger = logging.getLogger(__name__)
-
-
-def build_scalar_metrics():
-    return {
-        "accuracy": BinaryAccuracy(threshold=0.5),
-        "precision": torchmetrics.Precision(task="binary"),
-        "recall": torchmetrics.Recall(task="binary"),
-        "f1": torchmetrics.F1Score(task="binary"),
-        "matthews": torchmetrics.MatthewsCorrCoef(task="binary"),
-        "cohen": torchmetrics.CohenKappa(task="binary"),
-        "auroc": torchmetrics.classification.BinaryAUROC(),
-    }
-
-
-def build_vector_metrics():
-    return {
-        "roc": torchmetrics.ROC(task="binary"),
-        "precision_recall_curve": torchmetrics.PrecisionRecallCurve(
-            task="binary"
-        ),
-        "confusion_matrix": torchmetrics.ConfusionMatrix(task="binary"),
-    }
-
-
-def get_hydra_logging_directory() -> Path:
-    hydra_cfg = hydra.core.hydra_config.HydraConfig.get()  # type: ignore
-    return Path(hydra_cfg["runtime"]["output_dir"])  # type: ignore
 
 
 def pad_sequences(
@@ -322,12 +298,10 @@ def select_features(X_train, X_val, X_test):
 def train_model(
     model, device, train_loader, val_loader, test_loader, save_name="aegis"
 ):
-    save_path = Path(os.getcwd()) / cfg.paths.checkpoints / save_name
     logger.info(
         "Training with the following"
         f" config:\n{omegaconf.omegaconf.OmegaConf.to_yaml(cfg)}"
     )
-    logger.info(f"Saving model in {save_path}")
     logger.info(f"Creating TensorBoard Logger")
     make_dir(get_hydra_logging_directory() / "tensorboard" / save_name)
     tb_logger = pl_loggers.TensorBoardLogger(
@@ -347,16 +321,18 @@ def train_model(
     logger.info(f"Set pytorch lightning accelerator as {accelerator}")
     logger.info(f"Instantiating Trainer")
     trainer = pl.Trainer(
-        default_root_dir=save_path,
+        default_root_dir=get_hydra_logging_directory(),
         accelerator=device.type,
         devices=cfg.compute.n_gpu,
         num_nodes=cfg.compute.num_nodes,
         max_epochs=cfg.training.epochs,
         callbacks=[
             ModelCheckpoint(
+                dirpath=get_hydra_logging_directory() / "checkpoints",
                 save_weights_only=False,
                 mode="min",
                 monitor="val_loss/dataloader_idx_0",
+                save_last=True,
             ),
             EarlyStopping(
                 monitor=cfg.training.early_stopping.monitor,
