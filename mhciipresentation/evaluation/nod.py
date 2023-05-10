@@ -7,128 +7,67 @@ This script validates our model against datasets from NOD mice
 """
 
 import argparse
+import logging
+from pathlib import Path
 
+import hydra
 import torch
-from torch import nn
-
+from experiments.train import prepare_nod_data
 from mhciipresentation.constants import AA_TO_INT, USE_GPU
-from mhciipresentation.inference import setup_model
+from mhciipresentation.inference import make_inference
 from mhciipresentation.loaders import load_nod_data, load_nod_idx
-from mhciipresentation.transformer import prepare_nod_data
 from mhciipresentation.utils import (
-    compute_performance_measures,
     encode_aa_sequences,
     make_dir,
     make_predictions_with_transformer,
-    render_roc_curve,
     render_precision_recall_curve,
+    render_roc_curve,
     set_pandas_options,
 )
+from omegaconf import DictConfig
+from pyprojroot import here
+from torch import nn
 
 set_pandas_options()
+logger = logging.getLogger(__name__)
+
+cfg: DictConfig
 
 
-def handle_public_NOD(
-    model: nn.Module, input_dim: int, device: torch.device, batch_size: int
-):
-    """Handles validation against part of the public NOD dataset
+@hydra.main(
+    version_base="1.3", config_path=str(here() / "conf"), config_name="config"
+)
+def main(nodconfig: DictConfig):
+    global cfg
+    cfg = nodconfig
+    _, _, data, _, _, y = prepare_nod_data()
 
-    Args:
-        model (nn.Module): model used to make predictions
-        input_dim (int): input dimension of the model
-        device (torch.device): device to run the model on.
-        batch_size (int): batch size to use for inference
-    """
-    # nod_data = load_nod_data()
-    # _, _, X_test_idx = load_nod_idx()
-    # test_data = nod_data.iloc[X_test_idx["index"]]
-    _, _, test_data, _, _, y_test = prepare_nod_data()
-
-    if FLAGS.model_with_pseudo_path is not None:
+    if cfg.model.feature_set == "seq_mhc":
+        input_dim = 33 + 2 + 34
         X = encode_aa_sequences(
-            test_data.peptide_with_mhcii_pseudosequence,
+            data.peptide,
+            AA_TO_INT,
+        )
+    elif cfg.model.feature_set == "seq_only":
+        input_dim = 33 + 2
+        X = encode_aa_sequences(
+            data.peptide,
             AA_TO_INT,
         )
     else:
-        X = encode_aa_sequences(
-            test_data["peptide"],
-            AA_TO_INT,
+        raise ValueError(
+            f"Unknown feature set {cfg.model.feature_set}. "
+            "Please choose from seq_only or seq_and_mhc"
         )
 
-    # y = test_data.label.values
-
-    predictions = make_predictions_with_transformer(
-        X, batch_size, device, model, input_dim, AA_TO_INT["X"]
+    make_inference(
+        X,
+        y,
+        cfg,
+        input_dim,
+        here() / "outputs" / "nod",
     )
-    performance = compute_performance_measures(predictions, y_test)
-    print(performance)
-    make_dir(FLAGS.results)
-    render_roc_curve(
-        predictions,
-        y_test,
-        FLAGS.results,
-        "NOD mouse public dataset, different proteins",
-        "nod_test",
-    )
-    render_precision_recall_curve(
-        predictions,
-        y_test,
-        FLAGS.results,
-        "NOD mouse public dataset, different proteins",
-        "nod_test",
-    )
-
-
-def main():
-    device = torch.device("cuda" if USE_GPU else "cpu")  # training device
-
-    if FLAGS.model_with_pseudo_path is not None:
-        model, input_dim, max_len = setup_model(
-            device, FLAGS.model_with_pseudo_path
-        )
-        print("model used: %s" % FLAGS.model_with_pseudo_path)
-    else:
-        model, input_dim, max_len = setup_model(
-            device, FLAGS.model_wo_pseudo_path
-        )
-        print("model used: %s" % FLAGS.model_wo_pseudo_path)
-
-    batch_size = max_len
-    print("input_dim: %i, max_len: %i" % (input_dim, max_len))
-
-    handle_public_NOD(model, input_dim, device, batch_size)
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser()
-    parser.add_argument(
-        "--model_with_pseudo_path",
-        "-modp",
-        type=str,
-        help="Path to the checkpoint of the model to evaluate.",
-    )
-    parser.add_argument(
-        "--model_wo_pseudo_path",
-        "-modwop",
-        type=str,
-        help="Path to the checkpoint of the model to evaluate.",
-    )
-    parser.add_argument(
-        "--results",
-        "-ress",
-        type=str,
-        help="Path storing the results should be stored.",
-    )
-    parser.add_argument(
-        "--features",
-        required=False,
-        help="Type of features to use",
-        choices=[
-            "seq_only",
-            "seq_mhc",
-        ],
-        default="seq_mhc",
-    )
-    global FLAGS
-    FLAGS = parser.parse_args()
     main()

@@ -66,21 +66,41 @@ class GPUUsageLogger(pl.Callback):
         super().__init__()
         self.summary_writer = SummaryWriter(log_dir=log_dir)
 
-    def on_train_batch_end(
-        self, trainer, pl_module, outputs, batch, batch_idx, dataloader_idx=0
-    ):
-        if batch_idx % 100 == 0:
-            gpu = GPUtil.getGPUs()[0]
-            global_step = trainer.global_step
-            self.summary_writer.add_scalar(
-                "gpu_usage/memory_used", gpu.memoryUsed, global_step
+    def on_train_epoch_end(self, trainer, batch_idx):
+        gpu = GPUtil.getGPUs()[0]
+        global_step = trainer.global_step
+        self.summary_writer.add_scalar(
+            "gpu_usage/memory_used", gpu.memoryUsed, global_step
+        )
+        self.summary_writer.add_scalar(
+            "gpu_usage/memory_total", gpu.memoryTotal, global_step
+        )
+        self.summary_writer.add_scalar(
+            "gpu_usage/memory_utilization", gpu.memoryUtil, global_step
+        )
+        self.summary_writer.add_scalar(
+            "gpu_usage/gpu_utilization", gpu.load, global_step
+        )
+
+
+class ResetProfilerCallback(pl.Callback):
+    def on_train_epoch_end(self, trainer, pl_module):
+        # Print profiler summary
+        if trainer.current_epoch % 50 or trainer.current_epoch == 1:
+            profiler_dump = trainer.profiler.summary()
+            dest = (
+                Path(trainer.profiler.dirpath)
+                / f"profiler_dump_epoch_{trainer.current_epoch}.csv"
             )
-            self.summary_writer.add_scalar(
-                "gpu_usage/memory_total", gpu.memoryTotal, global_step
-            )
-            self.summary_writer.add_scalar(
-                "gpu_usage/memory_utilization", gpu.memoryUtil, global_step
-            )
-            self.summary_writer.add_scalar(
-                "gpu_usage/gpu_utilization", gpu.load, global_step
-            )
+            # Make parent dir if non-existent
+            dest.parent.mkdir(parents=True, exist_ok=True)
+            if profiler_dump is not None:
+                profiler_dump.to_csv(
+                    dest,
+                    index=False,
+                )
+
+        # Reset profiler
+        trainer.profiler = trainer.profiler.__class__(
+            dirpath=trainer.profiler.dirpath
+        )

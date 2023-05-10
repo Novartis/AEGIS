@@ -1,8 +1,8 @@
 cuda: true
 mps: false
-n_cpu: 4
+n_cpu: 8
 num_nodes: 1
 n_gpu: 1
-n_cpu_loader: 5
+n_cpu_loader: 7
 use_cache: true
 benchmark: false
