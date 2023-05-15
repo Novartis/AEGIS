@@ -1,5 +1,4 @@
 output: outputs/
-checkpoints: checkpoints/
 cache: .cache/
 data_dir: data/
 splits_dir: ${data_dir}/splits/
@@ -13,3 +12,4 @@ encoded_data: ${processed_dir}/1-encoded/
 prediction: ${processed_dir}/2-predictions/
 performance: ${processed_dir}/3-performance/
 public_val_perf: ${data_dir}/public/validation_performance/
+checkpoint: outputs/2023-05-10/21-10-32/checkpoints/last.ckpt
