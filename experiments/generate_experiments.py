@@ -31,17 +31,16 @@ def build_job(overrides):
 
 # Give your job a name, so you can recognize it in the queue overview
 #SBATCH --job-name=imm
-#SBATCH --cpus-per-task=3
+#SBATCH --cpus-per-task=19
 #SBATCH --mem-per-cpu=5G
-#SBATCH --gpus-per-node=h100_pcie_2g.20gb:1
+#SBATCH --gres=shard:19
 #SBATCH --time=20-00:00:00
 #SBATCH --partition=p.hpcl91
 #SBATCH --output=/fs/pool/pool-hartout/Documents/Git/AEGIS/outputs/slurm_outputs/slurm-%j.out
 source /fs/home/${"USER"}/.bashrc
 cd /fs/pool/pool-hartout/Documents/Git/AEGIS
 export CUDA_VISIBLE_DEVICES=0   
-conda activate aegis
-python experiments/train.py {overrides}
+/fs/pool/pool-hartout/.conda/envs/aegis/bin/python experiments/train.py {overrides}
 
 exit 0
     """
@@ -66,17 +65,19 @@ def main():
 
     feature_set = ["seq_only", "seq_mhc"]
     data_source = ["iedb", "iedb_nod", "nod"]
-    layers = [2, 4, 8]
-    seeds = [0, 1, 2, 3, 4]
+    layers = [4, 8]
+    seeds = [0, 1, 2]
     for seed in seeds:
         for feat in feature_set:
             for ds in data_source:
-                build_job(
-                    f"dataset.data_source={ds} "
-                    + f"model.feature_set={feat} "
-                    + f"seed.seed={seed} "
-                    + f"hydra.run.dir=outputs/{ds}-{feat}-{seed}"
-                )
+                for layer in layers:
+                    build_job(
+                        f"dataset.data_source={ds} "
+                        + f"model.feature_set={feat} "
+                        + f"seed.seed={seed} "
+                        + f"model.aegis.n_layers={layer} "
+                        + f"hydra.run.dir=outputs/{ds}-{feat}-{seed}-{layer}"
+                    )
 
 
 if __name__ == "__main__":
