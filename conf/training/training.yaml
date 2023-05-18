@@ -1,4 +1,5 @@
-epochs: 1500
+epochs: 5000
+min_steps: 5000
 batch_size: 8000
 learning_rate:
   start_learning_rate: 0.001
@@ -14,3 +15,4 @@ early_stopping:
   patience: 30
   monitor: "val_loss/dataloader_idx_0"
   mode: "min"
+  # delay_epochs: 100
