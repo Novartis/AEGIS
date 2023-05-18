@@ -4,7 +4,24 @@ import GPUtil
 import pytorch_lightning as pl
 import torch
 from mhciipresentation.utils import make_dir, save_obj
+from pytorch_lightning.callbacks.early_stopping import EarlyStopping
 from torch.utils.tensorboard import SummaryWriter
+
+
+class DelayedEarlyStopping(EarlyStopping):
+    """Only start early stopping mmonitoriung after a certain number of epochs"""
+
+    def __init__(self, delay_epochs, **kwargs):
+        super().__init__(**kwargs)
+        self.delay_epochs = delay_epochs
+
+    def on_train_end(self, trainer, pl_module):
+        self.wait_count = 0
+
+    def on_validation_end(self, trainer, pl_module):
+        if trainer.current_epoch < self.delay_epochs:
+            return
+        super().on_validation_end(trainer, pl_module)
 
 
 class VectorLoggingCallback(pl.Callback):
