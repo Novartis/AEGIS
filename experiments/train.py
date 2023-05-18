@@ -28,8 +28,8 @@ import torch
 import torchmetrics
 from Bio.SeqIO.FastaIO import SimpleFastaParser
 from mhciipresentation.callbacks import (
+    DelayedEarlyStopping,
     GPUUsageLogger,
-    ResetProfilerCallback,
     VectorLoggingCallback,
 )
 from mhciipresentation.constants import (
@@ -326,6 +326,7 @@ def train_model(
         devices=cfg.compute.n_gpu,
         num_nodes=cfg.compute.num_nodes,
         max_epochs=cfg.training.epochs,
+        min_steps=cfg.training.min_steps,
         callbacks=[
             ModelCheckpoint(
                 dirpath=get_hydra_logging_directory() / "checkpoints",
@@ -335,6 +336,7 @@ def train_model(
                 save_last=True,
             ),
             EarlyStopping(
+                # delay_epochs=cfg.training.early_stopping.delay_epochs,
                 monitor=cfg.training.early_stopping.monitor,
                 min_delta=cfg.training.early_stopping.min_delta,
                 patience=cfg.training.early_stopping.patience,
