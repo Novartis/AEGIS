@@ -1,12 +1,13 @@
 aegis:
-  embedding_size: 128
+  embedding:
+    size: 128
+    dummy_embedding: false
+    all_ones: false
   enc_ff_hidden: 64
   ff_hidden: 32
-  # n_layers: 4
-  # n_attn_heads: 4
   n_layers: 8
   n_attn_heads: 4
   dropout: 0.3
-
+  
 feature_set: seq_mhc
 # feature_set: seq_mhc 

@@ -39,7 +39,7 @@ def setup_model(input_dim, n_tokens, cfg):
         cfg.paths.checkpoint,
         seq_len=input_dim,
         n_tokens=n_tokens,
-        embedding_size=cfg.model.aegis.embedding_size,
+        embedding_size=cfg.model.aegis.embedding.size,
         n_attn_heads=cfg.model.aegis.n_attn_heads,
         enc_ff_hidden=cfg.model.aegis.enc_ff_hidden,
         ff_hidden=cfg.model.aegis.ff_hidden,
@@ -57,7 +57,9 @@ def setup_model(input_dim, n_tokens, cfg):
         vector_metrics=build_vector_metrics(),
         n_gpu=cfg.compute.n_gpu,
         n_cpu=cfg.compute.n_cpu,
-        steps_per_epoch=0,
+        steps_per_epoch=100,
+        dummy_encoding=cfg.model.aegis.embedding.dummy_embedding
+        all_ones=cfg.model.aegis.embedding.all_ones
     )
 
 

@@ -41,7 +41,31 @@ class PositionalEncoding(nn.Module):
         x = x + self.pe[: x.size(0)]
         return self.dropout(x)
 
+class DummyEncoding(nn.Module):
+    def __init__(
+            self, d_model: int, dropout: float = 0.1, max_len: int = 5000, all_ones: bool=False
+    ):
+        super().__init__()
+        self.dropout = nn.Dropout(p=dropout)
 
+        position = torch.arange(max_len).unsqueeze(1)
+        if not all_ones:
+            pe = torch.zeros(1, max_len, d_model)
+        else:
+            pe = torch.ones(1, max_len, d_model)
+        
+        self.register_buffer("pe", pe)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """
+        Arguments:
+            x: Tensor, shape ``[seq_len, batch_size, embedding_dim]``
+        """
+        x = x + self.pe[: x.size(0)]
+        return self.dropout(x)
+
+
+    
 class FeedForward(nn.Module):
     """Feedforward neural network using the output of the transformer for binary
     classification purposes.

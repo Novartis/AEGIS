@@ -475,7 +475,7 @@ def main(aegiscfg: DictConfig):
     model = TransformerModel(
         seq_len=input_dim,
         n_tokens=n_tokens,
-        embedding_size=cfg.model.aegis.embedding_size,
+        embedding_size=cfg.model.aegis.embedding.size,
         n_attn_heads=cfg.model.aegis.n_attn_heads,
         enc_ff_hidden=cfg.model.aegis.enc_ff_hidden,
         ff_hidden=cfg.model.aegis.ff_hidden,
@@ -494,6 +494,8 @@ def main(aegiscfg: DictConfig):
         n_gpu=cfg.compute.n_gpu,
         n_cpu=cfg.compute.n_cpu,
         steps_per_epoch=len(train_loader),
+        dummy_encoding=cfg.model.aegis.embedding.dummy_embedding
+        all_ones=cfg.model.aegis.embedding.all_ones
     )
     tic = timer()
     logger.info(f"Training start time is {tic}")
