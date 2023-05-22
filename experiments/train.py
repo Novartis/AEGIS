@@ -494,8 +494,8 @@ def main(aegiscfg: DictConfig):
         n_gpu=cfg.compute.n_gpu,
         n_cpu=cfg.compute.n_cpu,
         steps_per_epoch=len(train_loader),
-        dummy_encoding=cfg.model.aegis.embedding.dummy_embedding
-        all_ones=cfg.model.aegis.embedding.all_ones
+        dummy_encoding=cfg.model.aegis.embedding.dummy_embedding,
+        all_ones=cfg.model.aegis.embedding.all_ones,
     )
     tic = timer()
     logger.info(f"Training start time is {tic}")
