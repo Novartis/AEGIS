@@ -1,5 +1,5 @@
 epochs: 5000
-min_steps: 5000
+min_steps: 1000
 batch_size: 8000
 learning_rate:
   start_learning_rate: 0.001
