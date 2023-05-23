@@ -17,7 +17,11 @@ import pytorch_lightning as pl
 import torch
 import torchmetrics
 from mhciipresentation.constants import AA_TO_INT_PTM, USE_GPU
-from mhciipresentation.layers import FeedForward, PositionalEncoding, DummyEncoding
+from mhciipresentation.layers import (
+    DummyEncoding,
+    FeedForward,
+    PositionalEncoding,
+)
 from mhciipresentation.scheduler import (
     GradualWarmupScheduler,
     NoamScheduler,
@@ -46,30 +50,30 @@ class TransformerModel(pl.LightningModule):
     """Main class for the transformer encoder used in this script."""
 
     def __init__(
-            self,
-            seq_len: int,
-            n_tokens: int,
-            embedding_size: int,
-            n_attn_heads: int,
-            enc_ff_hidden: int,
-            ff_hidden: int,
-            n_layers: int,
-            dropout: float,
-            pad_num: int,
-            batch_size: int,
-            warmup_steps: int,
-            epochs: int,
-            start_learning_rate: float = 0.001,
-            peak_learning_rate: float = 0.01,
-            weight_decay: float = 0.01,
-            loss_fn=nn.BCELoss(),
-            scalar_metrics: Dict[str, Any] = {},
-            vector_metrics: Dict[str, Any] = {},
-            steps_per_epoch: int = 100,
-            n_gpu: int = 1,
-            n_cpu: int = 1,
-            dummy_encoding: bool=False,
-            all_ones: bool=False,
+        self,
+        seq_len: int,
+        n_tokens: int,
+        embedding_size: int,
+        n_attn_heads: int,
+        enc_ff_hidden: int,
+        ff_hidden: int,
+        n_layers: int,
+        dropout: float,
+        pad_num: int,
+        batch_size: int,
+        warmup_steps: int,
+        epochs: int,
+        start_learning_rate: float = 0.001,
+        peak_learning_rate: float = 0.01,
+        weight_decay: float = 0.01,
+        loss_fn=nn.BCELoss(),
+        scalar_metrics: Dict[str, Any] = {},
+        vector_metrics: Dict[str, Any] = {},
+        steps_per_epoch: int = 100,
+        n_gpu: int = 1,
+        n_cpu: int = 1,
+        dummy_encoding: bool = False,
+        all_ones: bool = False,
     ):
         r"""Initializes TransformerModel, including PositionalEncoding and
             TransformerEncoderLayer
@@ -90,13 +94,19 @@ class TransformerModel(pl.LightningModule):
         super().__init__()
         self.model_type = "Transformer"
         self.seq_len = seq_len
-        if dummy_encoding:
-            self.pos_encoder = PositionalEncoding(embedding_size, dropout, seq_len)
+        if not dummy_encoding:
+            self.pos_encoder = PositionalEncoding(
+                embedding_size, dropout, seq_len
+            )
         else:
             if all_ones:
-                self.pos_encoder = DummyEncoding(embedding_size, dropout, seq_len, all_ones=all_ones)
+                self.pos_encoder = DummyEncoding(
+                    embedding_size, dropout, seq_len, all_ones=all_ones
+                )
             else:
-                self.pos_encoder = DummyEncoding(embedding_size, dropout, seq_len, all_ones=all_ones)
+                self.pos_encoder = DummyEncoding(
+                    embedding_size, dropout, seq_len, all_ones=all_ones
+                )
         encoder_layers = TransformerEncoderLayer(
             embedding_size,
             n_attn_heads,
