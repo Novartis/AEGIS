@@ -5,6 +5,7 @@ outputs/
 .vscode/
 experiments/ablations/
 experiments/variants/
+experiments/inference/
 
 ### macOS ###
 # General
