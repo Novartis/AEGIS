@@ -18,7 +18,7 @@ import pytorch_lightning as pl
 import torch
 from mhciipresentation.callbacks import GPUUsageLogger, VectorLoggingCallback
 from mhciipresentation.constants import AA_TO_INT
-from mhciipresentation.inference import make_inference
+from experiments.inference import make_inference
 from mhciipresentation.loaders import epitope_file_parser
 from mhciipresentation.metrics import (
     build_scalar_metrics,
@@ -123,7 +123,7 @@ def main(cd4config: DictConfig) -> None:
         data.label.values,
         cfg,
         input_dim,
-        here() / "outputs" / "cd4",
+        get_hydra_logging_directory() / "performance_metrics",
     )
 
 

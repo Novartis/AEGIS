@@ -58,8 +58,8 @@ def setup_model(input_dim, n_tokens, cfg):
         n_gpu=cfg.compute.n_gpu,
         n_cpu=cfg.compute.n_cpu,
         steps_per_epoch=100,
-        dummy_encoding=cfg.model.aegis.embedding.dummy_embedding
-        all_ones=cfg.model.aegis.embedding.all_ones
+        dummy_encoding=cfg.model.aegis.embedding.dummy_embedding,
+        all_ones=cfg.model.aegis.embedding.all_ones,
     )
 
 
@@ -96,7 +96,7 @@ def make_inference(X, y, cfg, input_dim, dest_dir):
     loader = DataLoader(
         dataset,
         batch_size=cfg.training.batch_size,
-        num_workers=cfg.compute.n_cpu,
+        num_workers=cfg.compute.n_cpu_loader,
     )
     # batch_size = 5000
 
@@ -143,7 +143,13 @@ def make_inference(X, y, cfg, input_dim, dest_dir):
         ],
     )
     # This is specific to our model because of what we return in the predict_step method.
-    y_hat = trainer.predict(model, loader)[0]["y_hat"].reshape(-1)
+    # y_hat = trainer.predict(model, loader)[0]["y_hat"].reshape(-1)
+    y_hat = trainer.predict(model, loader)
+
+    y_hat_post = []
+    for batch in y_hat:
+        y_hat_post.append(batch["y_hat"])
+    y_hat = torch.tensor(np.concatenate(y_hat_post).reshape(-1))
     y = y.reshape(-1)
     scalar_metrics = build_scalar_metrics()
     vector_metrics = build_vector_metrics()

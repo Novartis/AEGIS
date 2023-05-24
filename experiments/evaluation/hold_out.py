@@ -13,7 +13,7 @@ import hydra
 import torch
 from experiments.train import prepare_iedb_data
 from mhciipresentation.constants import AA_TO_INT, USE_GPU
-from mhciipresentation.inference import make_inference, setup_model
+from experiments.inference import make_inference, setup_model
 from mhciipresentation.loaders import load_iedb_data, load_iedb_idx
 from mhciipresentation.utils import (
     encode_aa_sequences,
@@ -21,6 +21,7 @@ from mhciipresentation.utils import (
     make_predictions_with_transformer,
     render_roc_curve,
     set_pandas_options,
+    get_hydra_logging_directory,
 )
 from omegaconf import DictConfig
 from pyprojroot import here
@@ -40,6 +41,13 @@ def main(holdoutconfig: DictConfig):
     global cfg
     cfg = holdoutconfig
     _, _, data, _, _, y = prepare_iedb_data()
+
+    # HOTFIX: rename column
+    data = data.rename(
+        columns={
+            "peptide_with_mhcii_pseudosequence": "peptides_and_pseudosequence"
+        },
+    )
 
     DRB1_alleles = [
         "DRB1_0101",
@@ -123,7 +131,7 @@ def main(holdoutconfig: DictConfig):
                 y_alleles,
                 cfg,
                 input_dim,
-                here() / "outputs" / "hold_out" / allele,
+                get_hydra_logging_directory() / allele / "performance_metrics",
             )
 
 

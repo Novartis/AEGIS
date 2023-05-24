@@ -28,7 +28,7 @@ from mhciipresentation.constants import (
     USE_GPU,
     USE_SUBSET,
 )
-from mhciipresentation.inference import make_inference, setup_model
+from experiments.inference import make_inference, setup_model
 from mhciipresentation.loaders import (
     load_K562_dataset,
     load_melanoma_dataset,
@@ -130,7 +130,7 @@ def main(stratmanconfig: DictConfig) -> None:
         df.label.values,
         cfg,
         input_dim,
-        here() / "outputs" / "stratmann",
+        get_hydra_logging_directory() / "stratmann",
     )
 
 

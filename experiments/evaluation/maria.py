@@ -30,7 +30,7 @@ from mhciipresentation.constants import (
     USE_GPU,
     USE_SUBSET,
 )
-from mhciipresentation.inference import make_inference, setup_model
+from experiments.inference import make_inference, setup_model
 from mhciipresentation.loaders import (
     load_K562_dataset,
     load_melanoma_dataset,
@@ -133,7 +133,7 @@ def handle_K562_dataset(ligands: pd.DataFrame, fname: str) -> None:
         data.label.values,
         cfg,
         input_dim,
-        here() / "outputs" / "k562" / fname,
+        get_hydra_logging_directory() / "K562" / fname,
     )
 
 
@@ -165,21 +165,15 @@ def handle_melanoma_dataset(ligands: pd.DataFrame, fname: str) -> None:
             data.Sequence,
             AA_TO_INT,
         )
-    elif cfg.model.feature_set == "seq_only":
-        raise Exception("Data not available")
-    else:
-        raise ValueError(
-            f"Unknown feature set {cfg.model.feature_set}. "
-            "Please choose from seq_only or seq_and_mhc"
+        make_inference(
+            X,
+            data.label.values,
+            cfg,
+            input_dim,
+            get_hydra_logging_directory() / "melanoma",
         )
-
-    make_inference(
-        X,
-        data.label.values,
-        cfg,
-        input_dim,
-        here() / "outputs" / "melanoma",
-    )
+    else:
+        logger.info("Not possible")
 
 
 @hydra.main(
