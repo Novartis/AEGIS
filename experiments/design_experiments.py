@@ -1,3 +1,8 @@
+"""design_experiments.py
+
+This is simply a utility to design all of the experiments that we want to run.
+"""
+
 import itertools
 
 import pandas as pd
