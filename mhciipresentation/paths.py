@@ -68,5 +68,6 @@ PERFORMANCE = DATA_DIR / "processed/3-performance/"
 
 PLOTS = DATA_DIR / "plots/"
 
-
 PUBLIC_VAL_PERF = DATA_DIR / "public/validation_performance/"
+
+EVALUATION = DATA_DIR / "evaluation/"

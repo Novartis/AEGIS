@@ -24,6 +24,7 @@ from mhciipresentation.paths import (
     PROCESSED_DATA,
     RAW_DATA,
     SPLITS_DIR,
+    EVALUATION,
 )
 from scipy import sparse
 from tqdm import tqdm
@@ -240,6 +241,37 @@ def load_K562_dataset() -> Tuple[pd.DataFrame, pd.DataFrame]:
     DRB1_0101_ligands = supp_tables.parse("TableS5", header=1)
     DRB1_0404_ligands = supp_tables.parse("TableS6", header=1)
     return DRB1_0101_ligands, DRB1_0404_ligands
+
+
+def load_you_dataset() -> pd.DataFrame:
+    """Load You Dataset.
+
+    Returns:
+        pd.DataFrame: [description]
+    """
+    you_dataset = pd.read_csv(
+        EVALUATION / "tab_4_You_2022.txt",
+        sep="\t",
+        names=[
+            "sequence",
+            "label",
+            "mhc",
+        ],
+    )
+    return you_dataset
+
+
+def load_xu_dataset() -> pd.DataFrame:
+    """Load Xu Dataset."""
+    xu_dataset = pd.read_csv(EVALUATION / "XU.csv")
+    xu_dataset["HLA"] = (
+        xu_dataset.HLA.str.split("HLA-")
+        .str[1]
+        .str.replace("*", "_")
+        .str.replace(":", "")
+    )
+
+    return xu_dataset
 
 
 def load_uniprot() -> pd.DataFrame:

@@ -60,5 +60,6 @@ def compute_performance_metrics(scalar_metrics, vector_metrics, y, y_hat):
 def save_performance_metrics(
     dest_path: Path, scalar_metric_values: Dict, vector_metric_values: Dict
 ):
+    dest_path.mkdir(parents=True, exist_ok=True)
     save_obj(scalar_metric_values, dest_path / "scalar_metrics.pkl")
     save_obj(vector_metric_values, dest_path / "vector_metrics.pkl")
