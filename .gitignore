@@ -6,6 +6,7 @@ outputs/
 experiments/ablations/
 experiments/variants/
 experiments/inference/
+scripts/figures/*.tex
 
 ### macOS ###
 # General
