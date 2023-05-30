@@ -80,7 +80,7 @@ def reorder_columns(df: pd.DataFrame) -> List:
     """
     new_col_order = flatten_lists(
         [
-            [col + "_mean", col + "_std"]
+            [col + "_mean", col + "_stad"]
             for col in df.columns.to_list()
             if col not in ["seed", "layers", "feature_set", "data_source"]
         ]
@@ -89,11 +89,11 @@ def reorder_columns(df: pd.DataFrame) -> List:
     new_col_order = new_col_order[::-1]
 
     new_col_order = reposition_element(new_col_order, "epoch_mean", 0)
-    new_col_order = reposition_element(new_col_order, "epoch_std", 1)
+    new_col_order = reposition_element(new_col_order, "epoch_stad", 1)
     new_col_order = reposition_element(new_col_order, "step_mean", 2)
-    new_col_order = reposition_element(new_col_order, "step_std", 3)
+    new_col_order = reposition_element(new_col_order, "step_stad", 3)
     new_col_order = reposition_element(new_col_order, "train_loss_mean", 4)
-    new_col_order = reposition_element(new_col_order, "train_loss_std", 5)
+    new_col_order = reposition_element(new_col_order, "train_loss_stad", 5)
     new_col_order = [
         "data_source",
         "feature_set",
@@ -140,11 +140,11 @@ def main():  # pylint: disable=missing-docstring # pylint: disable=too-many-loca
         results["data_source"] = comb[1]
         results["layers"] = comb[2]
         results["seed"] = comb[3]
-
         df = pd.concat([pd.DataFrame(results, index=[0]), df])
-
+    df.to_csv("outputs/variants/raw_ranking_performance.csv", index=False)
     df = df.sort_values(metric_to_sort_models, ascending=False)
     new_col_order = reorder_columns(df)
+
     df_mean = (
         df.groupby(
             [
@@ -156,7 +156,7 @@ def main():  # pylint: disable=missing-docstring # pylint: disable=too-many-loca
         .mean()
         .reset_index()
     )
-    df_std = (
+    df_stad = (
         df.groupby(
             [
                 "data_source",
@@ -169,9 +169,9 @@ def main():  # pylint: disable=missing-docstring # pylint: disable=too-many-loca
     )
 
     df = df_mean.merge(
-        df_std,
+        df_stad,
         on=["data_source", "feature_set", "layers"],
-        suffixes=("_mean", "_std"),
+        suffixes=("_mean", "_stad"),
     )
     df = df[new_col_order]
     # Drop columns that are all NaN
