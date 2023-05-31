@@ -127,7 +127,9 @@ def main():  # pylint: disable=missing-docstring # pylint: disable=too-many-loca
         best_epoch = epoch_metrics[metric_to_select_models].idxmax()
         epoch_metrics = epoch_metrics.loc[best_epoch]
         relevant_fields = [
-            col for col in epoch_metrics.index.to_list() if "dataloader" in col
+            col
+            for col in epoch_metrics.index.to_list()
+            if "dataloader" in col or "train" in col
         ] + [
             "step",
             "train_loss",

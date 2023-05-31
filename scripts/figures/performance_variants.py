@@ -87,22 +87,38 @@ def make_table(df_stats):
 
     df_stats = df_stats[train_cols + val_cols + test_cols]
 
-    latex = (
-        df_stats.to_latex(
-            index=True,
-            escape=False,
-            sparsify=True,
-            multirow=True,
-            multicolumn=True,
-            multicolumn_format="c",
-            bold_rows=True,
-        ).replace("_", " ")
-        # .replace("val val ", "val ")
-        # .replace("test val ", "test ")
-    )
+    latex = df_stats.to_latex(
+        index=True,
+        escape=False,
+        sparsify=True,
+        multirow=True,
+        multicolumn=True,
+        multicolumn_format="c",
+        bold_rows=True,
+    ).replace("_", " ")
 
     with open(here() / "scripts/figures/variants_table.tex", "w") as f:
         f.write(latex)
+
+
+def get_curve_data(row):
+    path = (
+        "outputs/variants/"
+        + row["feature_set"]
+        + "-"
+        + row["data_source"]
+        + "-"
+        + row["layers"]
+        + "-"
+        + str(row["seed"])
+        + "/vector_logs/"
+        + str(row["epoch"])
+    )
+    row
+
+
+def make_plot_curves(df_raw, df_stats):
+    df_raw.apply(get_curve_data, axis=1)
 
 
 def main():
@@ -115,9 +131,9 @@ def main():
     # First, make a nice table with the variants.
     make_table(df_stats)
 
-    # Plot scalars as bar plot with errors over seeds
-
     # Plot curves for best epoch with errors over seeds
+    df_raw["epoch"] = df_raw["epoch"].astype(int)
+    make_plot_curves(df_raw, df_stats)
 
 
 if __name__ == "__main__":
