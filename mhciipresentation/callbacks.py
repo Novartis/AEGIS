@@ -52,9 +52,32 @@ class VectorLoggingCallback(pl.Callback):
         self.state["train"] = []
 
     def on_validation_epoch_end(self, trainer, pl_module) -> None:
-        y_true = torch.cat([x["y_true"] for x in self.state["val"]])
-        y_hat = torch.cat([x["y_hat"] for x in self.state["val"]])
-        self.log_vectors(y_true, y_hat, "val", pl_module)
+        def log_loader(idx, name):
+            # Loop through 0 and 1 and torch.cat each vectors separately
+            y_true = torch.cat(
+                [
+                    x["y_true"]
+                    for x in [
+                        s for s in self.state["val"] if s.get("idx") == idx
+                    ]
+                ]
+            )
+            y_hat = torch.cat(
+                [
+                    x["y_hat"]
+                    for x in [
+                        s for s in self.state["val"] if s.get("idx") == idx
+                    ]
+                ]
+            )
+            self.log_vectors(y_true, y_hat, name, pl_module)
+
+        idx_values = [0, 1]
+        dset_names = ["val", "test"]
+
+        for idx, name in zip(idx_values, dset_names):
+            log_loader(idx, name)
+
         self.state["val"] = []
 
     def on_test_epoch_end(self, trainer, pl_module) -> None:
@@ -67,14 +90,14 @@ class VectorLoggingCallback(pl.Callback):
         log_dest = self.root / str(model.current_epoch)
         make_dir(log_dest)
         for metric in [
-            key for key in model.vector_metrics.keys() if prefix in key
+            key for key in model.vector_metrics.keys() if str(prefix) in key
         ]:
             metric_res = model.vector_metrics[metric](
                 y_hat.cpu(), y_true.cpu().int()
             )
             save_obj(
                 metric_res,
-                log_dest / str(prefix + "_" + metric + ".pkl"),
+                log_dest / str(metric + ".pkl"),
             )
 
 
