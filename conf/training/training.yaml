@@ -15,4 +15,3 @@ early_stopping:
   patience: 30
   monitor: "val_loss/dataloader_idx_0"
   mode: "min"
-  # delay_epochs: 100
