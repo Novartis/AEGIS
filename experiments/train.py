@@ -367,17 +367,7 @@ def train_model(
     logger.info(f"Total number of parameters: {count_parameters(model)}")
     logger.info(f"Testing model on validation and test set.")
 
-    val_result = trainer.validate(
-        model, dataloaders=val_loader, verbose=cfg.debug.verbose
-    )
-    test_result = trainer.test(
-        model, dataloaders=test_loader, verbose=cfg.debug.verbose
-    )
-    result = {
-        "test": test_result,
-        "val": val_result,
-    }
-    return model, result
+    return model
 
 
 @hydra.main(
@@ -500,7 +490,7 @@ def main(aegiscfg: DictConfig):
     tic = timer()
     logger.info(f"Training start time is {tic}")
 
-    model, result = train_model(
+    model = train_model(
         model,
         device,
         train_loader,
