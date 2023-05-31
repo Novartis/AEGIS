@@ -254,7 +254,12 @@ class TransformerModel(pl.LightningModule):
             )
         )
         self.compute_metrics("val", y_hat, y_true)
-        return {"loss": loss, "y_hat": y_hat, "y_true": y_true}
+        return {
+            "loss": loss,
+            "y_hat": y_hat,
+            "y_true": y_true,
+            "idx": dataloader_idx,
+        }
 
     def test_step(self, batch, batch_idx, dataloader_idx=1):
         src_padding_mask = self.generate_padding_mask(batch)
@@ -269,7 +274,12 @@ class TransformerModel(pl.LightningModule):
             )
         )
         self.compute_metrics("test", y_hat, y_true)
-        return {"loss": loss, "y_hat": y_hat, "y_true": y_true}
+        return {
+            "loss": loss,
+            "y_hat": y_hat,
+            "y_true": y_true,
+            "idx": dataloader_idx,
+        }
 
     def predict_step(
         self, batch: Any, batch_idx: int, dataloader_idx: int = 0
