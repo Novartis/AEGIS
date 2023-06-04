@@ -10,11 +10,20 @@ The aim of this script is to visualize the performance of all model variants
 import os
 import pandas as pd
 import re
+import torch
 
-# from mhciipresentation.performance_utils import load_scalars
+from mhciipresentation.utils import load_obj
 import itertools
 from pyprojroot import here
 from functools import partial
+from pathlib import Path
+
+import matplotlib.pyplot as plt
+from plotting_utils import (
+    build_confusion_matrix,
+    build_precision_recall_curve,
+    build_roc_curve,
+)
 
 
 def highlight_best(s, best_models):
@@ -101,24 +110,46 @@ def make_table(df_stats):
         f.write(latex)
 
 
-def get_curve_data(row):
+def get_path(row):
     path = (
         "outputs/variants/"
-        + row["feature_set"]
+        + str(row["feature_set"])
         + "-"
-        + row["data_source"]
+        + str(row["data_source"])
         + "-"
-        + row["layers"]
+        + str(row["layers"])
         + "-"
         + str(row["seed"])
         + "/vector_logs/"
         + str(row["epoch"])
     )
-    row
+    row["path"] = path
+    return row
 
 
 def make_plot_curves(df_raw, df_stats):
-    df_raw.apply(get_curve_data, axis=1)
+    df_raw = df_raw.apply(get_path, axis=1)
+    feature_set = ["seq_only", "seq_mhc"]
+    data_source = ["iedb", "iedb_nod", "nod"]
+    layers = [2, 4, 8]
+    for combination in itertools.product(feature_set, data_source, layers):
+        df_raw_subset = df_raw.loc[
+            (df_raw["feature_set"] == combination[0])
+            & (df_raw["data_source"] == combination[1])
+            & (df_raw["layers"] == combination[2])
+        ]
+        curve_types = ["confusion_matrix", "precision_recall_curve", "roc"]
+        splits = ["train", "val", "test"]
+        for comb in itertools.product(curve_types, splits):
+            curve_type, split = comb
+            if curve_type == "confusion_matrix":
+                build_confusion_matrix(df_raw_subset, split)
+            elif curve_type == "precision_recall_curve":
+                build_precision_recall_curve(df_raw_subset, split)
+            elif curve_type == "roc":
+                build_roc_curve(df_raw_subset, split)
+            else:
+                raise ValueError("Curve type not recognized")
 
 
 def main():
