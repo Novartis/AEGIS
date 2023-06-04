@@ -108,7 +108,7 @@ def make_inference(X, y, cfg, input_dim, dest_dir):
         n_tokens=len(list(AA_TO_INT.values())),
         cfg=cfg,
     )
-    save_name = "aegis_inference_cd4"
+    save_name = "aegis_inference"
     trainer = pl.Trainer(
         default_root_dir=get_hydra_logging_directory() / "predictions_logs",
         accelerator=device.type,
