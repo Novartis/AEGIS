@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
-"""performance_variants.py
+"""performance_variants
 
 The aim of this script is to visualize the performance of all model variants
 
@@ -20,7 +20,8 @@ from pathlib import Path
 
 import matplotlib.pyplot as plt
 from plotting_utils import (
-    build_confusion_matrix,
+    
+    ,
     build_precision_recall_curve,
     build_roc_curve,
     build_loss_curve,
@@ -157,57 +158,44 @@ def get_metrics_logs_path(row):
     return row
 
 
-def make_plot_curves(df_raw, df_stats):
-    df_raw = df_raw.apply(get_vectors_logs_path, axis=1)
-    df_raw = df_raw.apply(get_metrics_logs_path, axis=1)
-    feature_set = ["seq_only", "seq_mhc"]
-    data_source = ["iedb", "iedb_nod", "nod"]
-    layers = [2, 4, 8]
-    for combination in itertools.product(feature_set, data_source, layers):
-        df_raw_subset = df_raw.loc[
-            (df_raw["feature_set"] == combination[0])
-            & (df_raw["data_source"] == combination[1])
-            & (df_raw["layers"] == combination[2])
-        ]
-        curve_types = [
-            "confusion_matrix",
-            "precision_recall_curve",
-            "roc",
-            "loss",
-        ]
-        splits = ["train", "val", "test"]
-        annot = f"Feature set: {combination[0]}, Data source: {combination[1]}, Layers: {combination[2]}"
-        ext = f"{combination[0]}_{combination[1]}_{combination[2]}"
-        dest_dir = build_dest_dir(ext)
-        for comb in itertools.product(curve_types, splits):
-            curve_type, split = comb
-            if curve_type == "confusion_matrix":
-                build_confusion_matrix(df_raw_subset, split, dest_dir, annot)
-            elif curve_type == "precision_recall_curve":
-                build_precision_recall_curve(
-                    df_raw_subset, split, dest_dir, annot
-                )
-            elif curve_type == "roc":
-                build_roc_curve(df_raw_subset, split, dest_dir, annot)
-            elif curve_type == "loss":
-                build_loss_curve(df_raw_subset, split, dest_dir, annot)
-            else:
-                raise ValueError("Curve type not recognized")
+def make_plot(feat, ds, emb, all_ones, seed):
+    curve_types = [
+        "confusion_matrix",
+        "precision_recall_curve",
+        "roc",
+        "loss",
+    ]
+    splits = ["train", "val", "test"]
+    annot = f"Feature set: {combination[0]}, Data source: {combination[1]}, Layers: {combination[2]}"
+    ext = f"{combination[0]}_{combination[1]}_{combination[2]}"
+    dest_dir = build_dest_dir(ext)
+    for comb in itertools.product(curve_types, splits):
+        curve_type, split = comb
+        if curve_type == "confusion_matrix":
+            build_confusion_matrix(df_raw_subset, split, dest_dir, annot)
+        elif curve_type == "precision_recall_curve":
+            build_precision_recall_curve(df_raw_subset, split, dest_dir, annot)
+        elif curve_type == "roc":
+            build_roc_curve(df_raw_subset, split, dest_dir, annot)
+        elif curve_type == "loss":
+            build_loss_curve(df_raw_subset, split, dest_dir, annot)
+        else:
+            raise ValueError("Curve type not recognized")
 
 
 def main():
     # Load data
-    df_raw = pd.read_csv(
-        here() / "outputs/variants/raw_ranking_performance.csv"
-    )
-    df_stats = pd.read_csv(here() / "outputs/variants/ranked_models.csv")
-
-    # First, make a nice table with the variants.
-    make_table(df_stats)
-
-    # Plot curves for best epoch with errors over seeds
-    df_raw["epoch"] = df_raw["epoch"].astype(int)
-    make_plot_curves(df_raw, df_stats)
+    feature_set = ["seq_mhc"]
+    data_source = ["iedb"]
+    embedding = [
+        "true",
+    ]
+    all_ones = ["true", "false"]
+    seeds = [0, 1, 2, 3]
+    for feat, ds, emb, all_ones, seed in itertools.product(
+        feature_set, data_source, embedding, all_ones, seeds
+    ):
+        make_plot(feat, ds, emb, all_ones, seed)
 
 
 if __name__ == "__main__":

@@ -17,14 +17,43 @@ from pathlib import Path
 import numpy as np
 import matplotlib.pyplot as plt
 from scipy.interpolate import interp1d
+import pandas as pd
 
 
-def build_confusion_matrix(df_raw_subset, split):
-    confusion_matrix_data = []
-    for path in df_raw_subset.path.tolist():
-        confusion_matrix_data.append(
-            load_obj(Path(path) / f"{split}_confusion_matrix.pkl")
+def add_annot(annot, pos="top"):
+    if pos == "top":
+        plt.text(
+            0.5,
+            0.05,
+            annot,
+            transform=plt.gca().transAxes,
+            horizontalalignment="center",
+            verticalalignment="center",
         )
+    elif pos == "bottom":
+        plt.text(
+            0.5,
+            0.95,
+            annot,
+            transform=plt.gca().transAxes,
+            horizontalalignment="center",
+            verticalalignment="center",
+        )
+    else:
+        raise ValueError(f"pos must be either 'top' or 'bottom', got {pos}")
+
+
+def build_confusion_matrix(
+    df_raw_subset, split, dest_dir, annot, load_data=True
+):
+    if load_data:
+        confusion_matrix_data = []
+        for path in df_raw_subset.path.tolist():
+            confusion_matrix_data.append(
+                load_obj(Path(path) / f"{split}_confusion_matrix.pkl")
+            )
+    else:
+        confusion_matrix_data = df_raw_subset
     mean_cm = torch.stack(confusion_matrix_data).float().mean(dim=0)
     std_cm = torch.stack(confusion_matrix_data).float().std(dim=0)
     fig, ax = plt.subplots()
@@ -46,20 +75,26 @@ def build_confusion_matrix(df_raw_subset, split):
     ax.set_xlabel("Predicted label")
     ax.set_ylabel("True label")
     ax.set_title("Confusion matrix")
-
     # Show the plot
+    add_annot(annot, pos="top")
     plt.savefig(
-        here() / f"scripts/figures/outputs/confusion_matrix_{split}.pdf",
+        dest_dir / f"confusion_matrix_{split}.pdf",
     )
     plt.close()
 
 
-def build_precision_recall_curve(df_raw_subset, split):
-    precision_recall_curve_data = []
-    for path in df_raw_subset.path.tolist():
-        precision_recall_curve_data.append(
-            load_obj(Path(path) / f"{split}_precision_recall_curve.pkl")
-        )
+def build_precision_recall_curve(
+    df_raw_subset, split, dest_dir, annot, load_data=True
+):
+    if load_data:
+        precision_recall_curve_data = []
+        for path in df_raw_subset.path.tolist():
+            precision_recall_curve_data.append(
+                load_obj(Path(path) / f"{split}_precision_recall_curve.pkl")
+            )
+    else:
+        precision_recall_curve_data = df_raw_subset
+
     for idx, curve in enumerate(precision_recall_curve_data):
         precision, recall, thresholds = curve
         sorted_indices = np.argsort(recall)
@@ -94,16 +129,21 @@ def build_precision_recall_curve(df_raw_subset, split):
     plt.xlabel("Recall")
     plt.ylabel("Precision")
     plt.title(f"Precision-Recall curve for {split} split")
+    add_annot(annot, pos="bottom")
     plt.savefig(
-        here() / f"scripts/figures/outputs/precision_recall_curve_{split}.pdf",
+        dest_dir / f"precision_recall_curve_{split}.pdf",
     )
     plt.close()
 
 
-def build_roc_curve(df_raw_subset, split):
-    roc_curve_data = []
-    for path in df_raw_subset.path.tolist():
-        roc_curve_data.append(load_obj(Path(path) / f"{split}_roc.pkl"))
+def build_roc_curve(df_raw_subset, split, dest_dir, annot, load_data=True):
+    if load_data:
+        roc_curve_data = []
+        for path in df_raw_subset.path.tolist():
+            roc_curve_data.append(load_obj(Path(path) / f"{split}_roc.pkl"))
+    else:
+        roc_curve_data = df_raw_subset
+
     for idx, curve in enumerate(roc_curve_data):
         fpr, tpr, thresholds = curve
         sorted_indices = np.argsort(fpr)
@@ -138,7 +178,40 @@ def build_roc_curve(df_raw_subset, split):
     plt.xlabel("False Positive Rate")
     plt.ylabel("True Positive Rate")
     plt.title(f"ROC curve for {split} split")
+    add_annot(annot, pos="bottom")
+    plt.savefig(dest_dir / f"roc_curve_{split}.pdf")
+    plt.close()
+
+
+def build_loss_curve(df_raw_subset, split, dest_dir, annot, load_data=True):
+    if load_data:
+        roc_curve_data = []
+        for path in df_raw_subset.metrics.tolist():
+            roc_curve_data.append(pd.read_csv(path))
+    else:
+        roc_curve_data = df_raw_subset
+
+    loss_iters = []
+    for idx, logs in enumerate(roc_curve_data):
+        if split == "train":
+            loss_col = "train_loss"
+        elif split == "val":
+            loss_col = "val_loss/dataloader_idx_0"
+        elif split == "test":
+            loss_col = "val_loss/dataloader_idx_1"
+        else:
+            raise ValueError(f"Split {split} not recognized")
+        loss_iters.append(logs[loss_col].dropna())
+    loss_iters = np.array(loss_iters)
+
+    # Make plot of all the curves
+    for idx, loss in enumerate(loss_iters):
+        plt.plot(loss)
+    plt.xlabel("Step")
+    plt.ylabel("Loss")
+    plt.title(f"Loss curve for {split} split")
+    add_annot(annot, pos="top")
     plt.savefig(
-        here() / f"scripts/figures/outputs/roc_curve_{split}.pdf",
+        dest_dir / f"loss_curve_{split}.pdf",
     )
     plt.close()
