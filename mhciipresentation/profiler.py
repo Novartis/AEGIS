@@ -19,7 +19,7 @@ class CustomAdvancedProfiler(Profiler):
         self,
         dirpath: Optional[Union[str, Path]] = None,
         filename: Optional[str] = None,
-        line_count_restriction: float = 1.0,
+        line_count_restriction: float = 0.0,
     ) -> None:
         super().__init__(dirpath=dirpath, filename=filename)
         self.profiled_actions: Dict[str, cProfile.Profile] = {}
@@ -31,13 +31,14 @@ class CustomAdvancedProfiler(Profiler):
         self.profiled_actions[action_name].enable()
 
     def stop(self, action_name: str) -> None:
-        pr = self.profiled_actions.get(action_name)
-        if pr is None:
-            raise ValueError(
-                f"Attempting to stop recording an action ({action_name}) which"
-                " was never started."
-            )
-        pr.disable()
+        pass
+        # pr = self.profiled_actions.get(action_name)
+        # if pr is None:
+        #     raise ValueError(
+        #         f"Attempting to stop recording an action ({action_name}) which"
+        #         " was never started."
+        #     )
+        # pr.disable()
 
     def summary(self) -> str:
         recorded_stats = {}
@@ -65,6 +66,7 @@ class CustomAdvancedProfiler(Profiler):
             df = pd.DataFrame(rows)
             df["action_name"] = action_name
             dfs = pd.concat([dfs, df])
+        self.__init__(self.dirpath)
         return dfs
 
     def describe(self) -> None:

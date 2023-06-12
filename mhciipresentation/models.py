@@ -281,6 +281,17 @@ class TransformerModel(pl.LightningModule):
             "idx": dataloader_idx,
         }
 
+    def on_train_epoch_end(self) -> None:
+        if self.trainer.profiler is not None:
+            self.trainer.profiler.dirpath.mkdir(parents=True, exist_ok=True)
+            self.trainer.profiler.summary().to_csv(
+                self.trainer.profiler.dirpath
+                / f"summary_{self.current_epoch}.csv",
+                index=False,
+                float_format="%.5f",
+            )
+        return None
+
     def predict_step(
         self, batch: Any, batch_idx: int, dataloader_idx: int = 0
     ) -> Any:
