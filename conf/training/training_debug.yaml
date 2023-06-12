@@ -1,6 +1,6 @@
-epochs: 50
-min_steps: 10
-batch_size: 64
+epochs: 10
+min_steps: 50
+batch_size: 2048
 learning_rate:
   start_learning_rate: 0.001
   peak_learning_rate: 0.001
