@@ -320,6 +320,9 @@ def train_model(
         raise ValueError("Unknown Pytorch Lightning Accelerator")
     logger.info(f"Set pytorch lightning accelerator as {accelerator}")
     logger.info(f"Instantiating Trainer")
+    logger.info(
+        f"profiler to {get_hydra_logging_directory() / 'advanced_profiler'}"
+    )
     trainer = pl.Trainer(
         default_root_dir=get_hydra_logging_directory(),
         accelerator=device.type,
