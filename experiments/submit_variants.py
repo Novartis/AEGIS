@@ -7,8 +7,10 @@ import os
 
 
 def main():
-    for batch_file in os.listdir(
-        "/fs/pool/pool-hartout/Documents/Git/AEGIS/experiments/variants/"
+    for batch_file in sorted(
+        os.listdir(
+            "/fs/pool/pool-hartout/Documents/Git/AEGIS/experiments/variants/"
+        )
     ):
         os.system(
             "cd /fs/pool/pool-hartout/Documents/Git/AEGIS && sbatch"
