@@ -9,10 +9,10 @@ import pandas as pd
 
 def main():
     epoch_0 = pd.read_csv(
-        "outputs/2023-06-12/17-07-02/advanced_profiler/summary_0.csv"
+        "outputs/2023-06-12/21-01-11/advanced_profiler/summary_0.csv"
     )
     epoch_3 = pd.read_csv(
-        "outputs/2023-06-12/17-07-02/advanced_profiler/summary_3.csv"
+        "outputs/2023-06-12/21-01-11/advanced_profiler/summary_4.csv"
     )
 
     epoch_0.sort_values(by=["cumulative_time"], ascending=False, inplace=True)
