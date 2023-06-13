@@ -304,9 +304,9 @@ def train_model(
     )
     logger.info(f"Creating TensorBoard Logger")
     make_dir(get_hydra_logging_directory() / "tensorboard" / save_name)
-    tb_logger = pl_loggers.TensorBoardLogger(
-        save_dir=get_hydra_logging_directory() / "tensorboard", name=save_name
-    )
+    # tb_logger = pl_loggers.TensorBoardLogger(
+    #     save_dir=get_hydra_logging_directory() / "tensorboard", name=save_name
+    # )
     csv_logger = pl_loggers.CSVLogger(
         save_dir=get_hydra_logging_directory() / "csv", name=save_name
     )
@@ -336,31 +336,23 @@ def train_model(
                 save_last=True,
             ),
             EarlyStopping(
-                # delay_epochs=cfg.training.early_stopping.delay_epochs,
                 monitor=cfg.training.early_stopping.monitor,
                 min_delta=cfg.training.early_stopping.min_delta,
                 patience=cfg.training.early_stopping.patience,
                 verbose=False,
                 mode=cfg.training.early_stopping.mode,
             ),
-            LearningRateMonitor("epoch", log_momentum=cfg.debug.verbose),
             RichProgressBar(leave=True),
-            VectorLoggingCallback(
-                root=Path(get_hydra_logging_directory()) / "vector_logs"
-            ),
             GPUUsageLogger(
                 log_dir=get_hydra_logging_directory()
                 / "tensorboard"
                 / "gpu_usage"
             ),
         ],
-        logger=[tb_logger, csv_logger],
+        logger=[csv_logger],
         log_every_n_steps=1,
         benchmark=cfg.debug.benchmark,
         check_val_every_n_epoch=cfg.training.check_val_every_n_epoch,
-        profiler=CustomAdvancedProfiler(
-            dirpath=get_hydra_logging_directory() / "advanced_profiler"
-        ),
     )
     trainer.fit(model, train_loader, val_dataloaders=[val_loader, test_loader])
 
@@ -502,6 +494,13 @@ def main(aegiscfg: DictConfig):
     logger.info(f"Training end time is {toc}")
     total_time = toc - tic
     logger.info(f"Total training time is {total_time}")
+    # Move all the logs off the SSD
+    logger.info(
+        f"Moving logs to {here()}/outputs/variants/{str(get_hydra_logging_directory()).split('/')}"
+    )
+    os.system(
+        f"mv {get_hydra_logging_directory()} {here()}/outputs/variants/{str(get_hydra_logging_directory()).split('/')[-1]}"
+    )
 
 
 if __name__ == "__main__":

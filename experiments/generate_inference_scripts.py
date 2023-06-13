@@ -65,7 +65,7 @@ def build_inference_set(
     for feature_set_option, dataset_option, layer, seed in itertools.product(
         feature_set_options, dataset_options, layers, seeds
     ):
-        overrides = f"dataset.data_source={dataset_option} model.feature_set={feature_set_option} paths.checkpoint=outputs/variants/{feature_set_option}-{dataset_option}-{layer}-{seed}/checkpoints/last.ckpt hydra.run.dir=outputs/inference/{script_name.split('.')[0]}/{feature_set_option}-{dataset_option}-{layer}-{seed}"
+        overrides = f"dataset.data_source={dataset_option} model.feature_set={feature_set_option} model.aegis.n_layers={layer} paths.checkpoint=outputs/variants/{feature_set_option}-{dataset_option}-{layer}-{seed}/checkpoints/last.ckpt hydra.run.dir=outputs/inference/{script_name.split('.')[0]}/{feature_set_option}-{dataset_option}-{layer}-{seed}"
         build_job(script_name, overrides, path_to_scripts)
 
 
@@ -80,13 +80,16 @@ def main():
             if filename.endswith(".sh"):
                 os.remove(os.path.join(dirpath, filename))
 
+    # layers = ["4"]
+    layers = ["10"]
+    seeds = ["0", "1", "2", "3"]
     # cd4
     build_inference_set(
         script_name="cd4.py",
         feature_set_options=["seq_only", "seq_mhc"],
         dataset_options=["iedb_nod", "iedb"],
-        layers=["4"],
-        seeds=["0", "1", "2", "3"],
+        layers=layers,
+        seeds=seeds,
         path_to_scripts=path_to_scripts / "cd4",
     )
 
@@ -95,8 +98,8 @@ def main():
         script_name="hold_out.py",
         feature_set_options=["seq_only", "seq_mhc"],
         dataset_options=["iedb_nod", "iedb"],
-        layers=["4"],
-        seeds=["0", "1", "2", "3"],
+        layers=layers,
+        seeds=seeds,
         path_to_scripts=path_to_scripts / "hold_out",
     )
 
@@ -105,8 +108,8 @@ def main():
         script_name="maria.py",
         feature_set_options=["seq_only", "seq_mhc"],
         dataset_options=["iedb_nod", "iedb"],
-        layers=["4"],
-        seeds=["0", "1", "2", "3"],
+        layers=layers,
+        seeds=seeds,
         path_to_scripts=path_to_scripts / "maria",
     )
 
@@ -115,8 +118,8 @@ def main():
         script_name="nod.py",
         feature_set_options=["seq_only", "seq_mhc"],
         dataset_options=["iedb_nod", "nod"],
-        layers=["4"],
-        seeds=["0", "1", "2", "3"],
+        layers=layers,
+        seeds=seeds,
         path_to_scripts=path_to_scripts / "nod",
     )
 
@@ -125,8 +128,8 @@ def main():
         script_name="stratmann.py",
         feature_set_options=["seq_only", "seq_mhc"],
         dataset_options=["iedb_nod", "nod"],
-        layers=["4"],
-        seeds=["0", "1", "2", "3"],
+        layers=layers,
+        seeds=seeds,
         path_to_scripts=path_to_scripts / "stratmann",
     )
 
@@ -135,8 +138,8 @@ def main():
         script_name="you.py",
         feature_set_options=["seq_only", "seq_mhc"],
         dataset_options=["iedb_nod", "iedb"],
-        layers=["4"],
-        seeds=["0", "1", "2", "3"],
+        layers=layers,
+        seeds=seeds,
         path_to_scripts=path_to_scripts / "you",
     )
 
@@ -145,8 +148,8 @@ def main():
         script_name="xu.py",
         feature_set_options=["seq_only", "seq_mhc"],
         dataset_options=["iedb_nod", "iedb"],
-        layers=["4"],
-        seeds=["0", "1", "2", "3"],
+        layers=layers,
+        seeds=seeds,
         path_to_scripts=path_to_scripts / "xu",
     )
 

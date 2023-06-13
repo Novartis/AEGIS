@@ -230,7 +230,12 @@ class TransformerModel(pl.LightningModule):
         y_hat = self(batch, src_padding_mask)
         loss = self.loss_fn(y_hat, batch[1].view(-1, 1).double())
         self.log(
-            "train_loss", loss, batch_size=batch[0].shape[0], sync_dist=True
+            "train_loss",
+            loss,
+            batch_size=batch[0].shape[0],
+            sync_dist=True,
+            on_epoch=True,
+            on_step=False,
         )
 
         y_true = torch.Tensor(
@@ -246,7 +251,12 @@ class TransformerModel(pl.LightningModule):
         y_hat = self(batch, src_padding_mask)
         loss = self.loss_fn(y_hat, batch[1].view(-1, 1).double())
         self.log(
-            "val_loss", loss, batch_size=batch[0].shape[0], sync_dist=True
+            "val_loss",
+            loss,
+            batch_size=batch[0].shape[0],
+            sync_dist=True,
+            on_epoch=True,
+            on_step=False,
         )
         y_true = torch.Tensor(
             Binarizer(threshold=0.5).transform(
@@ -266,7 +276,12 @@ class TransformerModel(pl.LightningModule):
         y_hat = self(batch, src_padding_mask)
         loss = self.loss_fn(y_hat, batch[1].view(-1, 1).double())
         self.log(
-            "test_loss", loss, batch_size=batch[0].shape[0], sync_dist=True
+            "test_loss",
+            loss,
+            batch_size=batch[0].shape[0],
+            sync_dist=True,
+            on_epoch=True,
+            on_step=False,
         )
         y_true = torch.Tensor(
             Binarizer(threshold=0.5).transform(
@@ -280,6 +295,17 @@ class TransformerModel(pl.LightningModule):
             "y_true": y_true,
             "idx": dataloader_idx,
         }
+
+    # def on_train_epoch_end(self) -> None:
+    #     if self.trainer.profiler is not None:
+    #         self.trainer.profiler.dirpath.mkdir(parents=True, exist_ok=True)
+    #         self.trainer.profiler.summary().to_csv(
+    #             self.trainer.profiler.dirpath
+    #             / f"summary_{self.current_epoch}.csv",
+    #             index=False,
+    #             float_format="%.5f",
+    #         )
+    #     return None
 
     def predict_step(
         self, batch: Any, batch_idx: int, dataloader_idx: int = 0
