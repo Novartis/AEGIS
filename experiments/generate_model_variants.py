@@ -29,8 +29,8 @@ def build_job(overrides, path_to_scripts):
 #SBATCH --gres=gpu:1
 #SBATCH --time=20-00:00:00
 #SBATCH --partition=p.hpcl91
-#SBATCH --exclude=hpcl9101,hpcl9103
-#SBATCH --output=/fs/pool/pool-hartout/Documents/Git/AEGIS/outputs/slurm_outputs/slurm-%j.out
+#SBATCH --exclude=hpcl9101
+#SBATCH --output=/fs/home/hartout/slurm/slurm-%j.out
 #SBATCH --mail-user=hartout@biochem.mpg.de 
 #SBATCH --mail-type=FAIL 
 source /fs/home/${"USER"}/.bashrc
@@ -68,13 +68,14 @@ def main():
     combinations = list(
         itertools.product(feature_set, data_source, layers, seeds)
     )
+    home_dir = "/fs/home/hartout"
     for comb in combinations:
         build_job(
             f"dataset.data_source={comb[1]} "
             + f"model.feature_set={comb[0]} "
             + f"seed.seed={comb[3]} "
             + f"model.aegis.n_layers={comb[2]} "
-            + f"hydra.run.dir=outputs/variants/{comb[0]}-{comb[1]}-{comb[2]}-{comb[3]}",
+            + f"hydra.run.dir={home_dir}/logs/variants/{comb[0]}-{comb[1]}-{comb[2]}-{comb[3]}",
             path_to_scripts,
         )
 

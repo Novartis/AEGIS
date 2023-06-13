@@ -28,7 +28,7 @@ def build_job(overrides, path_to_scripts):
 #SBATCH --gres=gpu:1
 #SBATCH --time=20-00:00:00
 #SBATCH --partition=p.hpcl91
-#SBATCH --output=/fs/pool/pool-hartout/Documents/Git/AEGIS/outputs/slurm_outputs/slurm-%j.out
+#SBATCH --output=/fs/home/hartout/slurm/slurm-%j.out
 #SBATCH --mail-user=hartout@biochem.mpg.de 
 #SBATCH --mail-type=FAIL 
 source /fs/home/${"USER"}/.bashrc
@@ -64,10 +64,13 @@ def main():
     ]
     all_ones = ["true", "false"]
     seeds = [0, 1, 2, 3]
-
+    abla = ["abla"]
     combinations = list(
-        itertools.product(feature_set, data_source, embedding, all_ones, seeds)
+        itertools.product(
+            feature_set, data_source, embedding, all_ones, seeds, abla
+        )
     )
+    home_dir = "/fs/home/hartout"
     for comb in combinations:
         build_job(
             f"dataset.data_source={comb[1]} "
@@ -75,7 +78,7 @@ def main():
             + f"seed.seed={comb[4]} "
             + f"model.aegis.embedding.dummy_embedding={comb[2]} "
             + f"model.aegis.embedding.all_ones={comb[3]} "
-            + f"hydra.run.dir=outputs/ablations/{comb[0]}-{comb[1]}-{comb[2]}-{comb[3]}-{comb[4]}",
+            + f"hydra.run.dir={home_dir}/logs/ablations/{comb[0]}-{comb[1]}-{comb[2]}-{comb[3]}-{comb[4]}-{comb[5]}",
             path_to_scripts,
         )
 
