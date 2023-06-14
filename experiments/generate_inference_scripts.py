@@ -117,7 +117,7 @@ def main():
     build_inference_set(
         script_name="nod.py",
         feature_set_options=["seq_only", "seq_mhc"],
-        dataset_options=["iedb_nod", "nod"],
+        dataset_options=["iedb_nod", "nod", "iedb"],
         layers=layers,
         seeds=seeds,
         path_to_scripts=path_to_scripts / "nod",
