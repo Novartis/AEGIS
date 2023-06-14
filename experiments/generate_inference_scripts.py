@@ -81,7 +81,7 @@ def main():
                 os.remove(os.path.join(dirpath, filename))
 
     # layers = ["4"]
-    layers = ["10"]
+    layers = ["2", "4", "8"]
     seeds = ["0", "1", "2", "3"]
     # cd4
     build_inference_set(
