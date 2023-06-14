@@ -22,6 +22,7 @@ def build_scalar_metrics():
         "matthews": torchmetrics.MatthewsCorrCoef(task="binary"),
         "cohen": torchmetrics.CohenKappa(task="binary"),
         "auroc": torchmetrics.AUROC(task="binary"),
+        "auprc": torchmetrics.AveragePrecision(task="binary"),
     }
 
 
