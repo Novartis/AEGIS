@@ -73,7 +73,7 @@ def make_table(df_stats):
         ]
     )
 
-    df_stats.set_index(["data_source", "feature_set", "layers"], inplace=True)
+    df_stats.set_index(["data_source", "feature_set"], inplace=True)
     df_stats.style.set_caption("Model variants ranked by performance")
     # df_stats.style.highlight_max(
     #     subset=[col for col in df_stats.columns if col not in non_metric_cols]
@@ -118,7 +118,7 @@ def make_table(df_stats):
         bold_rows=True,
     ).replace("_", " ")
 
-    with open(here() / "scripts/figures/variants_table.tex", "w") as f:
+    with open(here() / "scripts/figures/ablation_table.tex", "w") as f:
         f.write(latex)
 
 
@@ -212,8 +212,8 @@ def main():
     make_table(df_stats)
 
     # Plot curves for best epoch with errors over seeds
-    df_raw["epoch"] = df_raw["epoch"].astype(int)
-    make_plot_curves(df_raw, df_stats)
+    # df_raw["epoch"] = df_raw["epoch"].astype(int)
+    # make_plot_curves(df_raw, df_stats)
 
 
 if __name__ == "__main__":
