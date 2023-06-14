@@ -46,7 +46,7 @@ def main(nodconfig: DictConfig):
     if cfg.model.feature_set == "seq_mhc":
         input_dim = 33 + 2 + 34
         X = encode_aa_sequences(
-            data.peptide,
+            data.peptide_with_mhcii_pseudosequence,
             AA_TO_INT,
         )
     elif cfg.model.feature_set == "seq_only":
