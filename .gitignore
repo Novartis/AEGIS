@@ -1,6 +1,12 @@
 # Custom directories
 data/
 logs/
+outputs/
+.vscode/
+experiments/ablations/
+experiments/variants/
+experiments/inference/
+scripts/figures/*.tex
 
 ### macOS ###
 # General

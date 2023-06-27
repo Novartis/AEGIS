@@ -1,0 +1,17 @@
+epochs: 2000
+min_steps: 100
+batch_size: 2048
+learning_rate:
+  peak_learning_rate: 0.0001
+  start_learning_rate: 0.0001
+  warmup_steps: 5000
+  reduction_factor: 2
+  patience: 10
+optimizer:
+  weight_decay: 1.0e-3
+check_val_every_n_epoch: 1
+early_stopping:
+  min_delta: 0.000000000000000000
+  patience: 30
+  monitor: "val_loss/dataloader_idx_0"
+  mode: "min"
