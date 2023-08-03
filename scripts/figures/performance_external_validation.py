@@ -55,6 +55,8 @@ def process_combination(combination, dset, subset):
                     / f"outputs/inference/{dset.split('/')[0]}/{combination[0]}-{combination[1]}-{combination[2]}/melanoma/"
                 )
     dest_dir.mkdir(exist_ok=True, parents=True)
+    if dset == "nod":
+        print("nod")
 
     comb = f"{combination[0]}-{combination[1]}"
     paths = []
@@ -82,6 +84,11 @@ def process_combination(combination, dset, subset):
                     here()
                     / f"outputs/inference/{dset}/{combination[0]}-{combination[1]}-{combination[2]}-{seed}/{dset}"
                 )
+            if dset == "nod":
+                inference_path = (
+                    here()
+                    / f"outputs/inference/{dset}/{combination[0]}-{combination[1]}-{combination[2]}-{seed}/nod"
+                )
         else:
             inference_path = (
                 here()
@@ -108,7 +115,7 @@ def process_combination(combination, dset, subset):
         [
             c
             for c in scalars.columns
-            if "matthews" in c or "auroc" in c or "f1" in c
+            if "matthews" in c or "auroc" in c or "f1" in c or "auprc" in c
         ]
     ]
     mean_scalars = scalars.mean()
@@ -117,6 +124,18 @@ def process_combination(combination, dset, subset):
     scalars = pd.concat([mean_scalars, std_scalars], axis=1).rename(
         columns={0: "mean", 1: "std"}
     )
+    if subset is None:
+        scalars = scalars.round(2)
+        scalars.to_csv(
+            here()
+            / f"scripts/figures/generated/inference/{dset}/{combination[0]}-{combination[1]}-{combination[2]}/scalars.csv"
+        )
+    else:
+        scalars = scalars.round(2)
+        scalars.to_csv(
+            here()
+            / f"scripts/figures/generated/inference/{dset}/{subset}/{combination[0]}-{combination[1]}-{combination[2]}/scalars.csv"
+        )
     if "maria" in dset:
         if len(dset.split("/")) >= 3:
             split = dset.split("/")[2]
@@ -125,6 +144,7 @@ def process_combination(combination, dset, subset):
     else:
         split = dset
 
+    scalars = scalars.round(2)
     build_confusion_matrix(
         [vectors[i]["confusion_matrix"] for i in range(4)],
         split=split,
@@ -142,12 +162,7 @@ def process_combination(combination, dset, subset):
         [vectors[i]["precision_recall_curve"] for i in range(4)],
         split=split,
         dest_dir=dest_dir,
-        annot="Dataset: CD4, Feature set: "
-        + combination[0]
-        + ", Data source: "
-        + combination[1]
-        + ", Layers: "
-        + combination[2],
+        annot=f"Area under PR Curve = $ {scalars.loc['auprc']['mean']} \pm {scalars.loc['auprc']['std']} $",
         load_data=False,
     )
 
@@ -155,14 +170,7 @@ def process_combination(combination, dset, subset):
         [vectors[i]["roc"] for i in range(4)],
         split=split,
         dest_dir=dest_dir,
-        annot="Dataset: CD4, Feature set: "
-        + combination[0]
-        + ", Data source: "
-        + combination[1]
-        + ", Layers: "
-        + combination[2]
-        + "\n"
-        + f"$ {scalars.loc['auroc']['mean']} \pm {scalars.loc['auroc']['std']} $",
+        annot=f"Area under ROC Curve = $ {scalars.loc['auroc']['mean']} \pm {scalars.loc['auroc']['std']} $",
         load_data=False,
     )
     return None

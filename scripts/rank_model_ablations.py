@@ -38,7 +38,7 @@ def check_versions(combinations):
     for comb in combinations:
         versions = os.listdir(
             here()
-            / f"outputs/ablations/{comb[0]}-{comb[1]}-{comb[2]}-{comb[3]}-{comb[4]}/csv/transformer/"
+            / f"outputs/ablations/{comb[0]}-{comb[1]}-{comb[2]}-{comb[3]}-{comb[4]}-{comb[5]}/csv/transformer/"
         )
         return max([v.split("_")[1] for v in versions])
 
@@ -103,6 +103,7 @@ def reorder_columns(df: pd.DataFrame) -> List:
     new_col_order = [
         "data_source",
         "feature_set",
+        "all_ones",
         # "layers",
     ] + new_col_order
 
@@ -121,16 +122,18 @@ def main():  # pylint: disable=missing-docstring # pylint: disable=too-many-loca
     ]
     all_ones = ["true", "false"]
     seeds = [0, 1, 2, 3]
-
+    abla = ["abla"]
     combinations = list(
-        itertools.product(feature_set, data_source, embedding, all_ones, seeds)
+        itertools.product(
+            feature_set, data_source, embedding, all_ones, seeds, abla
+        )
     )
     version = check_versions(combinations)
     df = pd.DataFrame()
     for comb in tqdm(combinations):
         df_comb = pd.read_csv(
             here()
-            / f"outputs/ablations/{comb[0]}-{comb[1]}-{comb[2]}-{comb[3]}-{comb[4]}/csv/transformer/version_{version}/metrics.csv"
+            / f"outputs/ablations/{comb[0]}-{comb[1]}-{comb[2]}-{comb[3]}-{comb[4]}-{comb[5]}/csv/transformer/version_{version}/metrics.csv"
         )
         epoch_metrics = df_comb.groupby(["epoch"]).mean(numeric_only=True)
         best_epoch = epoch_metrics[metric_to_select_models].idxmax()
@@ -198,6 +201,7 @@ def main():  # pylint: disable=missing-docstring # pylint: disable=too-many-loca
     # Drop columns that are all NaN
     df = df.dropna(axis=1, how="all")
     # Create the new column order and reindex the dataframe
+    df = df.loc[df.all_ones == "true"]
     df.to_csv(here() / "outputs/ablations/ranked_models.csv", index=False)
 
 

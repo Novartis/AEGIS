@@ -53,9 +53,9 @@ def make_table(df_stats):
     for metric in metrics:
         df_stats[metric] = (
             "$"
-            + df_stats[metric + "_mean"].map(lambda x: f"{x:.3f}")
+            + df_stats[metric + "_mean"].map(lambda x: f"{x:.2f}")
             + " \pm "
-            + df_stats[metric + "_stad"].map(lambda x: f"{x:.3f}")
+            + df_stats[metric + "_stad"].map(lambda x: f"{x:.2f}")
             + "$"
         )
 
@@ -206,8 +206,8 @@ def main():
     make_table(df_stats)
 
     # Plot curves for best epoch with errors over seeds
-    df_raw["epoch"] = df_raw["epoch"].astype(int)
-    make_plot_curves(df_raw, df_stats)
+    # df_raw["epoch"] = df_raw["epoch"].astype(int)
+    # make_plot_curves(df_raw, df_stats)
 
 
 if __name__ == "__main__":
