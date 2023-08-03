@@ -34,6 +34,7 @@ from omegaconf import DictConfig
 from pyprojroot import here
 from torch import nn
 import pandas as pd
+from mhciipresentation.utils import join_peptide_with_pseudosequence
 
 set_pandas_options()
 logger = logging.getLogger(__name__)
@@ -53,9 +54,14 @@ def prepare_you_dataset():
         you_dataset, mhcii_molecules, left_on="mhc", right_on="Name"
     )
     you_dataset = you_dataset.drop("Name", axis=1)
-    you_dataset["peptides_and_pseudosequence"] = (
-        you_dataset["sequence"] + you_dataset["Pseudosequence"]
+    you_dataset[
+        "peptides_and_pseudosequence"
+    ] = join_peptide_with_pseudosequence(
+        you_dataset["sequence"], you_dataset["Pseudosequence"]
     )
+    # you_dataset["peptides_and_pseudosequence"] = (
+    #     you_dataset["sequence"] + you_dataset["Pseudosequence"]
+    # )
     return you_dataset
 
 
