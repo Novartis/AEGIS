@@ -33,7 +33,7 @@ def add_annot(annot, pos="top"):
     elif pos == "bottom":
         plt.text(
             0.5,
-            0.95,
+            0.05,
             annot,
             transform=plt.gca().transAxes,
             horizontalalignment="center",
@@ -167,17 +167,27 @@ def build_roc_curve(df_raw_subset, split, dest_dir, annot, load_data=True):
     std_curve = np.std(curves, axis=0)
 
     # Plot mean curve with std deviation
-    plt.plot(fpr_levels, mean_curve, label="Mean curve")
+    plt.plot(fpr_levels, mean_curve, label="Mean curve", color="orange")
     plt.fill_between(
         fpr_levels,
         mean_curve - std_curve,
         mean_curve + std_curve,
         alpha=0.2,
+        color="lightcoral",
     )
-
+    plt.plot([0, 1], [0, 1], linestyle="--", color="blue")
     plt.xlabel("False Positive Rate")
     plt.ylabel("True Positive Rate")
-    plt.title(f"ROC curve for {split} split")
+    if split == "melanoma":
+        title = f"Differentiating Melanoma Dataset"
+    elif split == "DRB1_0101_ligands":
+        title = "Differentiating K562 DRB1*01:01 ligands from decoys"
+    elif split == "DRB1_0404_ligands":
+        title = "Differentiating K562 DRB1*04:04 ligands from decoys"
+    else:
+        title = f"ROC curve for {split} split"
+
+    plt.title(title)
     add_annot(annot, pos="bottom")
     plt.savefig(dest_dir / f"roc_curve_{split}.pdf")
     plt.close()
