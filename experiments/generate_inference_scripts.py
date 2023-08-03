@@ -3,11 +3,10 @@
 In this script, we provide the and slurm commands overrides for the various inference scripts.
 """
 
+import hashlib
 import itertools
 import os
 from pathlib import Path
-
-import hashlib
 
 
 def write_job(script_contents, path_to_scripts, fname):
@@ -24,9 +23,9 @@ def build_job(script_name, overrides, path_to_scripts):
 
 # Give your job a name, so you can recognize it in the queue overview
 #SBATCH --job-name=imm_inf
-#SBATCH --cpus-per-task=15
+#SBATCH --cpus-per-task=10
 #SBATCH --ntasks-per-core=2
-#SBATCH --mem-per-cpu=10G
+#SBATCH --mem-per-cpu=5G
 #SBATCH --time=20-00:00:00
 #SBATCH --partition=p.hpcl91
 #SBATCH --output=/fs/pool/pool-hartout/Documents/Git/AEGIS/outputs/slurm_outputs/slurm-%j.out
