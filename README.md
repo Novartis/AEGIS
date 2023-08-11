@@ -1,5 +1,9 @@
 # AEGIS - Predicting peptide presentation by MHCII using attention models.
 
+This repository contains the code for the method and results presented in:
+
+Philip Hartout,  Bojana Počuča,  Celia Méndez-García,  Christian Schleberger. [Investigating the human and non-obese diabetic mouse MHC class II immunopeptidome using protein language modelling][1]. Bioinformatics, 2023. 
+
 ## Getting started
 
 Install dependencies using [conda](https://conda.io/projects/conda/en/latest/user-guide/install/index.html) or similar. We recommend [mamba](https://mamba.readthedocs.io/en/latest/installation.html), a much faster drop-in replacement for conda rewritten in C++. 
@@ -15,6 +19,7 @@ pip install -e . # Install package in editable mode
 ```
 
 To train all model variants, we recommend access to and familiarity with a [SLURM](https://slurm.schedmd.com) computing cluster with GPUs. Each model was trained on 1 H100 GPU and the batch size was matched to maximize the utilization of the GPU VRAM (80GB), but doing an inference using the trained models requires much less VRAM, and if you want to retrain the models with fewer ressources, it's possible and would lead to similar results, albeit slower.
+
 
 ## Training
 
@@ -42,7 +47,16 @@ where `dataset.data_source` can be any of `{iedb_nod, nod, iedb}`, `model.featur
 
 ## Inference
 
-To run inference on the trained models, a similar procedure can be followed.
+A short example of how to run inference on a single model is given in the `example/` directory. There, just run:
+
+```bash
+# Run inference using a sample input fasta file
+./make_prediction.sh
+```
+
+Logs and predictions will print below. Using the scripts in the repository should be straightforward to run inference on a large number of samples or in another context such as a web server.
+
+To run all the inference experiments presented in the paper using the trained models, a similar procedure can be followed.
 
 ```bash
 # Run inference on all models
@@ -77,3 +91,5 @@ python experiments/submit_ablation.py
 # Run a single ablation study
 python experiments/train.py dataset.data_source=iedb model.feature_set=seq_mhc seed.seed=0 model.aegis.embedding.dummy_embedding=true model.aegis.embedding.all_ones=false hydra.run.dir=./path/to/custom/logs/directory
 ```
+
+[1]: https://doi.org/10.1093/bioinformatics/btad469

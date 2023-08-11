@@ -1,0 +1,1 @@
+python example/inference_batch.py dataset.data_source=iedb_nod model.feature_set=seq_mhc model.aegis.n_layers=4 paths.checkpoint=outputs/variants/seq_mhc-iedb_nod-4-1/checkpoints/last.ckpt 

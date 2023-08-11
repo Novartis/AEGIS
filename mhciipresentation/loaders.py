@@ -406,7 +406,7 @@ def load_melanoma_dataset() -> pd.DataFrame:
     return melanoma_table
 
 
-def epitope_file_parser(fname):
+def fasta_parser(fname):
     epitope_df = pd.DataFrame()
     with open(fname) as handle:
         for values in SimpleFastaParser(handle):
