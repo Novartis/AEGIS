@@ -19,7 +19,7 @@ import torch
 from mhciipresentation.callbacks import GPUUsageLogger, VectorLoggingCallback
 from mhciipresentation.constants import AA_TO_INT
 from experiments.inference import make_inference
-from mhciipresentation.loaders import epitope_file_parser
+from mhciipresentation.loaders import fasta_parser
 from mhciipresentation.metrics import (
     build_scalar_metrics,
     build_vector_metrics,
@@ -63,7 +63,7 @@ def main(cd4config: DictConfig) -> None:
         "Training with the following"
         f" config:\n{omegaconf.omegaconf.OmegaConf.to_yaml(cfg)}"
     )
-    epitope_df = epitope_file_parser(RAW_DATA / "CD4_epitopes.fsa")
+    epitope_df = fasta_parser(RAW_DATA / "CD4_epitopes.fsa")
     epitope_df["label"] = 1
     epitope_df = attach_pseudosequence(epitope_df)
     epitope_df["peptides_and_pseudosequence"] = epitope_df["peptide"].astype(
