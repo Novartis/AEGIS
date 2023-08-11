@@ -1,5 +1,9 @@
 # AEGIS - Predicting peptide presentation by MHCII using attention models.
 
+This repository contains the code for the method and results presented in:
+
+Philip Hartout,  Bojana Počuča,  Celia Méndez-García,  Christian Schleberger. [Investigating the human and non-obese diabetic mouse MHC class II immunopeptidome using protein language modelling][1]. Bioinformatics, 2023. 
+
 ## Getting started
 
 Install dependencies using [conda](https://conda.io/projects/conda/en/latest/user-guide/install/index.html) or similar. We recommend [mamba](https://mamba.readthedocs.io/en/latest/installation.html), a much faster drop-in replacement for conda rewritten in C++. 
@@ -87,3 +91,5 @@ python experiments/submit_ablation.py
 # Run a single ablation study
 python experiments/train.py dataset.data_source=iedb model.feature_set=seq_mhc seed.seed=0 model.aegis.embedding.dummy_embedding=true model.aegis.embedding.all_ones=false hydra.run.dir=./path/to/custom/logs/directory
 ```
+
+[1]: https://doi.org/10.1093/bioinformatics/btad469
