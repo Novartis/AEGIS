@@ -16,6 +16,7 @@ pip install -e . # Install package in editable mode
 
 To train all model variants, we recommend access to and familiarity with a [SLURM](https://slurm.schedmd.com) computing cluster with GPUs. Each model was trained on 1 H100 GPU and the batch size was matched to maximize the utilization of the GPU VRAM (80GB), but doing an inference using the trained models requires much less VRAM, and if you want to retrain the models with fewer ressources, it's possible and would lead to similar results, albeit slower.
 
+
 ## Training
 
 To train all models, we first generate a series of bash scripts which contain all the necessary commands to train the models. This is done by running the following command (make sure to change the SLURM parameters as needed in the `script_cotents` according to your cluster's configuration):
@@ -42,7 +43,16 @@ where `dataset.data_source` can be any of `{iedb_nod, nod, iedb}`, `model.featur
 
 ## Inference
 
-To run inference on the trained models, a similar procedure can be followed.
+A short example of how to run inference on a single model is given in the `example/` directory. There, just run:
+
+```bash
+# Run inference using a sample input fasta file
+./make_prediction.sh
+```
+
+Logs and predictions will print below. Using the scripts in the repository should be straightforward to run inference on a large number of samples or in another context such as a web server.
+
+To run all the inference experiments presented in the paper using the trained models, a similar procedure can be followed.
 
 ```bash
 # Run inference on all models
